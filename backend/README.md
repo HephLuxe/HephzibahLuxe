@@ -1,11 +1,5 @@
 # Hephzibah Luxe — backend
 
-Django + DRF API for the Hephzibah Luxe luxury event-planning platform. It powers
-the client portal where celebrants and staff coordinate an event end to end:
-events and event days, meetings and prep, contacts, conversations, reminders,
-budgets, invoices/receipts/payment schedules, document delivery, and
-transactional email — plus the Django admin. It is API-only (JSON, JWT auth); the
-frontend is a separate app.
 
 ## Stack
 
