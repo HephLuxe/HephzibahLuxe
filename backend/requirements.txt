@@ -1,0 +1,41 @@
+# Hephzibah Luxe — backend runtime dependencies.
+# Regenerate a fully-frozen list any time with:
+#   ./venv/Scripts/python.exe -m pip freeze > requirements.txt
+# Pins below match the versions currently in the venv.
+
+# ── Core framework ──
+Django>=5.2,<5.3
+djangorestframework>=3.16,<4
+djangorestframework-simplejwt>=5.5,<6
+django-cors-headers>=4.9,<5
+django-environ>=0.13,<1
+
+# ── Database (Postgres) ──
+psycopg2-binary>=2.9,<3
+
+# ── Production server + static files ──
+gunicorn>=23,<24
+whitenoise>=6.7,<7
+
+# ── Media storage (Cloudflare R2 / S3-compatible) ──
+django-storages>=1.14,<2
+boto3>=1.40,<2
+
+# ── Background tasks (Celery + Redis) ──
+celery>=5.6,<6
+django-celery-beat>=2.9,<3
+redis>=6,<7
+django-redis>=7,<8
+
+# ── Email (Brevo transactional API) ──
+sib-api-v3-sdk>=7.6,<8
+
+# ── Rate limiting (keys in apps/core/ratelimit.py) ──
+django-ratelimit>=4.1,<5
+
+# ── Observability standard (see docs/OBSERVABILITY_STANDARD.md) ──
+# Structured JSON logging + optional Loki push, DSN-guarded Sentry/GlitchTip.
+sentry-sdk>=2.20,<3
+python-json-logger>=3.1
+python-logging-loki>=0.3.1
+requests>=2.31
