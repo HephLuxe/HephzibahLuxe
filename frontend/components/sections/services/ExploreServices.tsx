@@ -24,7 +24,7 @@ const services = [
             "Polished, intentional events designed to reflect your brand, engage your guests, and deliver a seamless experience from arrival to farewell.",
     },
     {
-        image: "/images/hero/heroone.jpg",
+        image: "/images/hero/heroones.jpg",
         title: "Private Events & Social Gatherings",
         description:
             "From proposals and naming ceremonies to private dinners and intimate gatherings, every celebration is thoughtfully planned with the same care, intention, and attention to detail as our largest events.",
