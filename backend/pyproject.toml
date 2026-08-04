@@ -1,0 +1,27 @@
+# Tooling config only — this project manages dependencies via requirements*.txt,
+# not via a [build-system]/[project] table, so none is declared here on purpose.
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+# Migrations are machine-generated; don't lint them.
+extend-exclude = ["**/migrations/*"]
+
+[tool.ruff.lint]
+# Deliberately conservative to start: pyflakes (real bugs — unused imports,
+# undefined names), pycodestyle errors, and import sorting. Widen over time
+# (add "B", "UP", "DJ", ...) once the baseline is clean.
+select = ["E", "F", "I"]
+ignore = [
+    "E501",  # line length — many explanatory comments run long by design here
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "config"]
+
+[tool.ruff.lint.per-file-ignores]
+# settings.py imports some modules after env setup on purpose (already # noqa'd).
+"config/settings.py" = ["E402"]
+
+[tool.ruff.format]
+quote-style = "preserve"  # don't churn existing single/double quotes
