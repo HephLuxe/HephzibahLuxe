@@ -6,51 +6,51 @@ const steps = [
     {
         number: "No. 01",
         title: "CONNECT",
-        lead: "Understanding the meaning behind the moment",
+        lead: "Understanding the Meaning Behind the Moment",
         description:
-            "Every celebration begins with connection. Through a private conversation, we listen deeply — to your vision, your priorities, and what this moment truly represents. It's how we ensure every choice that follows feels personal, considered, and true to you.",
+            "Every celebration begins with connection. Through a private conversation, we listen deeply — to your vision, your priorities, and what this occasion truly represents. It’s how we ensure every choice that follows feels personal, considered, and true to you.",
     },
     {
         number: "No. 02",
         title: "ALIGN",
-        lead: "Clarity before creativity, so every detail is made with intention",
+        lead: "Clarity Before Creativity, So Every Detail Is Made with Intention",
         description:
-            "With your goals defined, we establish clarity. We define scope, priorities, and financial parameters so decisions feel grounded, transparent, and effortless — allowing every choice to feel informed, balanced, and aligned with your expectations.",
+            "With your goals defined, we establish clarity around scope, priorities, and financial parameters, allowing every decision to feel informed, balanced, and aligned with your expectations.",
     },
     {
         number: "No. 03",
         title: "CURATE",
-        lead: "Curated with purpose — the right setting, the right partners",
+        lead: "Curated with Purpose—The Right Setting, the Right Partners",
         description:
             "From venues to creative collaborators, every element is thoughtfully chosen. We curate spaces and partners that align with your vision and elevate the experience, ensuring nothing feels incidental or out of place.",
     },
     {
         number: "No. 04",
         title: "ENVISION",
-        lead: "Shaping the experience, from first impression to final moment",
+        lead: "Shaping the Experience, from First Impression to Final Moment",
         description:
-            "This is where your celebration begins to take form. Drawing from your story and inspiration, we shape the look, feel, and flow of the event — imagining it as your guests will experience it, from first arrival to final moment.",
+            "This is where your celebration begins to take form. Drawing from your story and inspiration, we shape the look, feel, and flow of the event—imagining it as your guests will experience it, from first arrival to the final farewell.",
     },
     {
         number: "No. 05",
         title: "ORCHESTRATE",
-        lead: "Precision behind the scenes, as the day unfolds.",
+        lead: "Precision Behind the Scenes, as the Day Unfolds",
         description:
             "As plans come together, we quietly manage the details — logistics, timelines, coordination — with care and exactness. Much of this work is unseen, but it's what allows the experience to feel seamless and unburdened.",
     },
     {
         number: "No. 06",
         title: "EXECUTE",
-        lead: "An experience fully realised — every moment felt, nothing left to chance.",
+        lead: "An Experience Fully Realised—Every Detail Felt, Nothing Left to Chance",
         description:
-            "On the day itself, our presence is steady and composed. We guide the celebration moment by moment, allowing you to remain fully present while everything unfolds exactly as intended.",
+            "On the day itself, our presence is steady and composed. We guide the celebration with quiet confidence, allowing you to remain fully present while everything unfolds exactly as envisioned.",
     },
     {
         number: "No. 07",
         title: "COMPLETION",
-        lead: "Care that extends beyond your day of celebration.",
+        lead: "Care That Extends Beyond Your Day of Celebration",
         description:
-            "As the celebration comes to a close, we remain attentive — ensuring loose ends are gently tied and the experience settles with the same intention it began. It's a quiet final touch, allowing the moment to end feeling whole, thoughtful, and well held.",
+            "As the celebration comes to a close, we remain attentive, ensuring every detail is completed and the experience settles with the same intention with which it began. It's a quiet final touch, allowing the celebration to end feeling whole and well held.",
     },
 ];
 

@@ -7,7 +7,6 @@ import Link from "next/link";
 const introImages = [
   "/images/portfoliopage/portfoliotwo.jpg",
   "/images/intro/introtwo.jpg",
-  "/images/intro/introthree.jpg",
   "/images/intro/introfour.jpg",
   "/images/intro/introfive.jpg",
 ];
@@ -51,7 +50,7 @@ export default function Intro() {
                 From intimate gatherings to milestone celebrations, we approach every event with presence, creativity, and thoughtful collaboration — curating experiences that feel effortless, warm, and memorable.
               </p>
               <p className="font-body font-extralight italic tracking-[0.03em] text-primary text-[15px] leading-[26px] sm:text-[16px] sm:leading-[28px] md:text-[18px] md:leading-[29px] lg:text-[19px] lg:leading-[30px] xl:text-[20px] xl:leading-[32px] 2xl:text-[22px] 2xl:leading-[34px]">
-                The story behind our work is one best discovered through our journey.
+                Our story is best discovered through the journey that shaped our work.
               </p>
             </div>
 

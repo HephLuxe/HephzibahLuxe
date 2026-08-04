@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const navLinks = [
     [
@@ -17,8 +18,22 @@ const navLinks = [
 ];
 
 export default function Footer() {
+    const pathname = usePathname();
+
     const scrollToTop = () => {
         window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    const handleNavClick = (href: string) => (e: React.MouseEvent<HTMLAnchorElement>) => {
+        if (pathname === href) {
+            // Already on this page — prevent navigation, just scroll up
+            e.preventDefault();
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        } else {
+            // Navigating to a new page — let Next.js route, then force scroll to top after navigation
+            // (Next.js sometimes preserves scroll on client transitions)
+            setTimeout(() => window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior }), 0);
+        }
     };
 
     return (
@@ -43,6 +58,7 @@ export default function Footer() {
                                     <li key={link.href}>
                                         <Link
                                             href={link.href}
+                                            onClick={handleNavClick(link.href)}
                                             className="font-display font-thin leading-[100%] text-background transition-opacity hover:opacity-70 text-[20px] sm:text-[24px] md:text-[30px] lg:text-[43px] xl:text-[50px] 2xl:text-[58px]"
                                         >
                                             {link.label}
@@ -54,26 +70,23 @@ export default function Footer() {
                     </nav>
                 </div>
 
-                {/* Block 2: tagline + address */}
+                {/* Rest of footer unchanged */}
                 <div className="mt-8 sm:mt-10 md:mt-10 lg:mt-12 xl:mt-14 flex flex-col lg:flex-row lg:justify-between gap-6 sm:gap-8 md:gap-10 lg:gap-16 xl:gap-20 2xl:gap-24">
-                    {/* Tagline */}
                     <div className="font-body font-normal tracking-[-0.01em] text-background max-w-[480px] xl:max-w-[560px] 2xl:max-w-[640px] text-[13px] leading-[16px] sm:text-[14px] sm:leading-[18px] md:text-[18px] md:leading-[22px] lg:text-[18px] lg:leading-[27px] xl:text-[18px] xl:leading-[29px] 2xl:text-[20px] 2xl:leading-[31px]">
                         <p>
-                            Crafting Refined, Beautiful, And Meaningful Celebrations — From Intimate Moments To Grand Occasions. Designed With Intention, Executed With Elegance.
+                            Crafting Refined, Beautiful, and Meaningful Celebrations — from Intimate Moments to Grand Occasions. Designed with Intention, Executed with Elegance.
                         </p>
-                        <p className="mt-3 sm:mt-3.5 md:mt-4 lg:mt-4">Nigerian Rooted | Globally Reaching.</p>
+                        <p className="mt-3 sm:mt-3.5 md:mt-4 lg:mt-4">Nigerian-Rooted | Globally Connected</p>
                     </div>
 
-                    {/* Address */}
                     <div className="font-body font-normal tracking-[-0.01em] text-background space-y-1 sm:space-y-1.5 md:space-y-1.5 lg:space-y-2 text-[13px] leading-[16px] sm:text-[14px] sm:leading-[18px] md:text-[18px] md:leading-[22px] lg:text-[18px] lg:leading-[27px] xl:text-[18px] xl:leading-[29px] 2xl:text-[20px] 2xl:leading-[31px]">
                         <p>29 Adeniran Ogunsanya, Surulere, Lagos, Nigeria</p>
-                        <p>Monday - Friday: 9:00am to 5:00pm</p>
-                        <p>Closed: After Dec 18th &nbsp;&amp; on Public Holidays</p>
+                        <p>Monday – Friday: 9:00 a.m. – 5:00 p.m.</p>
+                        <p>Closed: After December 18 and on Public Holidays</p>
                         <p>0802 320 3870</p>
                     </div>
                 </div>
 
-                {/* Bottom: copyright + mobile back to top */}
                 <div className="mt-8 sm:mt-9 md:mt-10 lg:mt-10 xl:mt-12 flex items-end justify-between gap-4">
                     <p className="font-body font-normal text-background text-[9px] leading-[16px] sm:text-[11px] sm:leading-[18px] md:text-[12px] md:leading-[20px] lg:text-[14px] lg:leading-[24px] xl:text-[15px] xl:leading-[26px] 2xl:text-[16px] 2xl:leading-[28px]">
                         © 2025 Hephzibah Luxe. All rights reserved.

@@ -1,12 +1,12 @@
 import Image from "next/image";
 
 const heroImages = [
-    { src: "/images/hero/heroone.jpg", alt: "Elegant dinner table setting" },
+    { src: "/images/hero/heroones.jpg", alt: "Elegant dinner table setting" },
     { src: "/images/hero/herotwo.jpg", alt: "Couple celebrating with sparklers" },
     { src: "/images/hero/herothree.jpg", alt: "Reception table with floral details" },
-    { src: "/images/hero/herofour.jpg", alt: "Couple in coordinated attire" },
-    { src: "/images/hero/herofive.jpg", alt: "Bride and groom on grand staircase" },
-    { src: "/images/hero/herosix.jpg", alt: "Ballroom event with hanging decor" },
+    { src: "/images/hero/herofours.jpg", alt: "Couple in coordinated attire" },
+    { src: "/images/hero/herosixs.jpg", alt: "Bride and groom on grand staircase" },
+    { src: "/images/portfoliopage/portfoliotwo.jpg", alt: "Ballroom event with hanging decor" },
     { src: "/images/hero/heroseven.jpg", alt: "Reception tablescape" },
     { src: "/images/hero/heroeight.jpg", alt: "Couple in formal evening wear" },
 ];
@@ -62,7 +62,7 @@ export default function Hero() {
                     </span>
                 </h1>
                 <p className="font-body font-normal text-center uppercase tracking-[-0.01em] text-[11px] leading-[19px] sm:text-[12px] sm:leading-[20px] md:text-[13px] md:leading-[22px] lg:text-[16px] lg:leading-[28px] xl:text-[18px] xl:leading-[32px] mt-4 sm:mt-6 lg:mt-10 max-w-[640px] xl:max-w-[740px]">
-                    A design-led wedding and event planning & design studio shaping celebrations with intention and grace.
+                    A design-led wedding and event planning studio shaping celebrations with intention and grace.
                 </p>
             </div>
         </section>

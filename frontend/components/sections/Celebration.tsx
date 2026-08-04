@@ -30,7 +30,7 @@ export default function Celebration() {
                         className="group mt-10 sm:mt-11 md:mt-12 inline-flex items-center justify-center gap-3 border border-background px-6 py-3 md:px-7 md:py-3.5 transition-colors hover:bg-background"
                     >
                         <span className="font-body font-light italic tracking-[0.01em] text-background group-hover:text-secondary transition-colors text-[18px] sm:text-[19px] md:text-[20px]">
-                            Send us a message
+                            Share Your Vision
                         </span>
                         <span className="relative inline-block w-[16px] h-[16px] sm:w-[17px] sm:h-[17px] md:w-[18px] md:h-[18px]">
                             <Image
@@ -76,7 +76,7 @@ export default function Celebration() {
                         className="group mt-12 inline-flex items-center justify-center gap-3 border border-background px-6 py-3 xl:px-7 xl:py-3.5 2xl:px-8 2xl:py-4 transition-colors hover:bg-background"
                     >
                         <span className="font-body font-light italic tracking-[0.01em] text-background group-hover:text-secondary transition-colors text-[20px] leading-[35px] xl:text-[22px] 2xl:text-[24px]">
-                            Send us a message
+                            Share Your Vision
                         </span>
                         <span className="relative inline-block w-[20px] h-[20px] xl:w-[22px] xl:h-[22px] 2xl:w-[24px] 2xl:h-[24px]">
                             <Image

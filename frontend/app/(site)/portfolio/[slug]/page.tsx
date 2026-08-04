@@ -25,6 +25,7 @@ export default async function PortfolioDetailsPage({ params }: PageProps) {
       ) : (
         <SingleDayEvent event={event} />
       )}
+
       <Instagram />
     </main>
   );

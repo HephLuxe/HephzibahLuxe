@@ -7,10 +7,10 @@ import Link from "next/link";
 const testimonials = [
     {
         image: "/images/testimonial/testimonialone.jpg",
-        name: "Lagos State Government",
+        name: "Abimbola, Manager",
         subheader: "Lagos State Government (OPL & CE) MSME Engagement Forum",
         quote:
-            "“Working with Hephzibah Luxe was a wonderful experience. Despite the short notice and tight budget, the team ensured the event was well organised and ran smoothly from start to finish. Their coordination and attention to detail helped create a welcoming and professional atmosphere for our guests. We truly appreciated their commitment and calm execution throughout the process.”",
+            "“Working with Hephzibah Luxe was a wonderful experience. Despite the short notice and tight budget, the team ensured the event was well organised and executed seamlessly from start to finish. Their coordination and attention to detail created a welcoming and professional atmosphere for our guests. We truly appreciated their dedication, professionalism, and calm approach throughout the entire process. ”",
         cta: "View their Forum",
         href: "/portfolio/msme-forum",
     },
@@ -19,18 +19,18 @@ const testimonials = [
         name: "Winnie, Celebrant",
         subheader: "A Golden 50th: An Intimate Two-Day Celebration of Family, Faith & Joy",
         quote:
-            "“I wanted something simple, but meaningful — and that's exactly what this was. Every detail felt intentional, and the photos captured me in such a beautiful and authentic way. There was a quiet attention to detail that made me feel completely at ease, and that really reflected in the final images. What I loved most is that the focus never shifted away from me. It truly felt like the perfect way to step into fifty.”",
+            "“I wanted something simple but meaningful—and that’s exactly what this was. Every detail felt intentional, and the photos captured me in such a beautiful, authentic way. There was a quiet attention to detail that made me feel completely at ease, and it truly showed in the final images. What I loved most was that the focus never shifted away from me. It felt like the perfect way to step into fifty. ”",
         cta: "View her Birthday",
         href: "/portfolio/golden-50th",
     },
     {
-        image: "/images/testimonial/testimonialthree.jpg",
-        name: "Shola, Manager",
-        subheader: "Lagos State Government (OPL & CE) MSME Engagement Forum",
+        image: "/images/testimonial/testimonialthreee.jpg",
+        name: "Olamipe, Family",
+        subheader: "An Intimate 85th: A Celebration of Grace, Family & Legacy",
         quote:
-            "“Hephzibah Luxe delivered an exceptionally well-organised event from start to finish. Their attention to detail, calm coordination, and ability to manage multiple stakeholders allowed our team to focus on the purpose of the launch while trusting that every element was handled seamlessly. The experience was polished, professional, and executed to a very high standard.”",
-        cta: "View their Launch",
-        href: "/portfolio",
+            "“With very little time to plan, we were unsure how everything would come together, but Hephzibah Luxe handled every detail with such care and calmness. Watching our mother celebrate alongside her church community, family, and close friends was incredibly special, and the atmosphere felt warm, graceful, and a true reflection of her life and faith.”",
+        cta: "View The Birthday",
+        href: "/portfolio/intimate-85th",
     },
 ];
 

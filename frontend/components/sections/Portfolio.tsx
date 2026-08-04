@@ -2,11 +2,12 @@ import Image from "next/image";
 import Link from "next/link";
 
 const portfolioImages = [
-  "/images/portfolio/portfolioone.jpg",
-  "/images/hero/herofour.jpg",
-  "/images/intro/introfive.jpg",
-  "/images/intro/introsix.jpg",
-  "/images/portfolio/portfoliotwo.jpg",
+  "/images/portfoliopage/portfoliotwo.jpg",
+  "/images/portfoliopage/portfoliofive.jpg",
+  "/images/portfoliopage/portfoliosix.jpg",
+  "/images/portfoliopage/portfolioeight.jpg",
+  "/images/portfoliopage/portfolionine.jpg",
+  "/images/hero/herofours.jpg",
 ];
 
 export default function Portfolio() {
@@ -37,7 +38,7 @@ export default function Portfolio() {
             </h3>
 
             <p className="mt-6 sm:mt-7 md:mt-8 font-body font-extralight tracking-[0.03em] text-background text-[14px] leading-[24px] sm:text-[16px] sm:leading-[26px] md:text-[18px] md:leading-[28px] lg:text-[18px] lg:leading-[30px] xl:text-[18px] xl:leading-[32px] 2xl:text-[22px] 2xl:leading-[34px] max-w-[400px] xl:max-w-[460px] 2xl:max-w-[520px]">
-              Explore the moments we&apos;ve brought to life through intentional planning and thoughtful design. Each celebration reflects a story of care, collaboration, and experience.
+              Explore the moments we&apos;ve brought to life through intentional planning and thoughtful design. Each celebration reflects a story of care, collaboration, and craftsmanship.
             </p>
 
             <Link

@@ -13,7 +13,7 @@ export default function BehindTheBrand() {
                             <span className="italic">the</span> BRAND
                         </h2>
                         <p className="mt-6 sm:mt-7 md:mt-8 font-body font-light italic tracking-[0.02em] text-[15px] leading-[26px] sm:text-[16px] sm:leading-[28px] md:text-[18px] md:leading-[30px]">
-                            Hephzibah Luxe is founded on the belief that celebrations are more than events — they are expressions of legacy, love, and intention. At the helm are a mother-daughter duo whose combined strengths bring warmth, precision, and unmistakable elegance to every experience.
+                            Hephzibah Luxe is founded on the belief that celebrations are more than events—they are expressions of legacy, love, and intention. At the helm is a mother-daughter duo whose combined strengths bring warmth, precision, and unmistakable elegance to every experience.
                         </p>
                     </div>
 
@@ -38,7 +38,7 @@ export default function BehindTheBrand() {
                                     <span className="italic">the</span> BRAND
                                 </h2>
                                 <p className="mt-8 xl:mt-10 lg:pl-16 xl:pl-20 2xl:pl-24 font-body font-light italic tracking-[0.02em] text-[16px] leading-[26px] xl:text-[18px] xl:leading-[30px] 2xl:text-[20px] 2xl:leading-[34px] max-w-[610px] xl:max-w-[700px] 2xl:max-w-[800px]">
-                                    Hephzibah Luxe is founded on the belief that celebrations are more than events — they are expressions of legacy, love, and intention. At the helm are a mother-daughter duo whose combined strengths bring warmth, precision, and unmistakable elegance to every experience.
+                                    Hephzibah Luxe is founded on the belief that celebrations are more than events—they are expressions of legacy, love, and intention. At the helm is a mother-daughter duo whose combined strengths bring warmth, precision, and unmistakable elegance to every experience.
                                 </p>
                             </div>
 
@@ -48,10 +48,10 @@ export default function BehindTheBrand() {
                                 </h3>
                                 <div className="mt-4 sm:mt-5 md:mt-6 space-y-4 sm:space-y-5 font-body font-light text-[15px] leading-[26px] sm:text-[16px] sm:leading-[28px] md:text-[18px] md:leading-[30px] lg:text-[18px] lg:leading-[30px] xl:text-[20px] xl:leading-[32px] 2xl:text-[22px] 2xl:leading-[34px]">
                                     <p>
-                                        Winnie is the heart of Hephzibah Luxe. With a calm presence and a deeply intuitive approach, she brings reassurance, wisdom, and grace to every celebration. Known for her thoughtful guidance and genuine warmth, Winnie has a gift for making clients feel at ease — even amid the most intricate planning moments. From venue walk-throughs to vendor relationships, she ensures every detail feels personal, considered, and beautifully aligned with your vision.
+                                        Winnie is the heart of Hephzibah Luxe. With a calm presence and a deeply intuitive approach, she brings reassurance, wisdom, and grace to every celebration. Known for her thoughtful guidance and genuine warmth, Winnie has a gift for making clients feel at ease—even amid the most intricate planning moments. From venue walk-throughs to vendor relationships, she ensures every detail feels personal, considered, and beautifully aligned with your vision.
                                     </p>
                                     <p>
-                                        Her love for event planning began long before Hephzibah Luxe. For years, Winnie was the trusted &ldquo;go-to&rdquo; for family celebrations, community gatherings, and milestone moments — naturally stepping into the role of organiser, guide, and calm anchor. What started as instinct has grown into experience, shaped by years of hands-on involvement and a genuine joy in bringing people together. When she isn&apos;t planning, Winnie enjoys spending time with family and nurturing the sense of hospitality that inspires everything she does.
+                                        Her love for event planning began long before Hephzibah Luxe. For years, Winnie was the trusted &ldquo;go-to&rdquo; for family celebrations, community gatherings, and milestone moments—naturally stepping into the role of organiser, guide, and calm anchor. What started as instinct has grown into a wealth of experience, shaped by years of hands-on involvement and a genuine joy in bringing people together. When she isn&apos;t planning, Winnie enjoys spending time with family and nurturing the spirit of hospitality that inspires everything she does.
                                     </p>
                                 </div>
                             </div>
@@ -76,19 +76,19 @@ export default function BehindTheBrand() {
                             </h3>
                             <div className="mt-4 sm:mt-5 md:mt-6 space-y-4 sm:space-y-5 font-body font-light text-[15px] leading-[26px] sm:text-[16px] sm:leading-[28px] md:text-[18px] md:leading-[30px] lg:text-[18px] lg:leading-[30px] xl:text-[20px] xl:leading-[32px] 2xl:text-[22px] 2xl:leading-[34px]">
                                 <p>
-                                    Tosin is the mind behind the seamlessness. Detail-driven and design-led, she brings structure, clarity, and strategic oversight to every celebration. With a background in digital management and a deep love for intentional design, Tosin ensures that timelines flow, communication remains effortless, and nothing is left to chance. Her approach blends creative vision with operational excellence — allowing beauty and precision to coexist effortlessly.
+                                    Tosin is the mind behind the seamlessness. Detail-driven and design-led, she brings structure, clarity, and strategic oversight to every celebration. With a background in digital management and a deep love for intentional design, Tosin ensures timelines flow, communication remains effortless, and nothing is left to chance. Her approach blends creative vision with operational excellence, allowing beauty and precision to coexist effortlessly.
                                 </p>
                                 <p>
-                                    Her path to Hephzibah Luxe has been shaped by years of balancing multiple roles, disciplines, and responsibilities — each sharpening her eye for detail, structure, and foresight. Working alongside her mother allows Tosin to pair strategy with intuition, systems with presence. Their constant back-and-forth — refining, questioning, and perfecting — ensures every decision is thoughtful and every experience held to the highest standard.
+                                    Her path to Hephzibah Luxe has been shaped by years of balancing multiple roles, disciplines, and responsibilities—each sharpening her eye for detail, structure, and foresight. Working alongside her mother allows Tosin to pair strategy with intuition and systems with presence. Their constant back-and-forth—refining, questioning, and perfecting—ensures every decision is thoughtful and every experience is held to the highest standard.
                                 </p>
                             </div>
 
                             <div className="mt-8 sm:mt-9 md:mt-10 xl:mt-12">
                                 <p className="font-body font-semibold italic text-[15px] leading-[26px] sm:text-[16px] sm:leading-[28px] md:text-[18px] md:leading-[30px] lg:text-[18px] lg:leading-[26px] xl:text-[20px] xl:leading-[30px] 2xl:text-[22px] 2xl:leading-[32px]">
-                                    One Vision. Two Perspectives. Elegance in Every Element.
+                                   One Vision. Two Perspectives. Elegance in Every Element.
                                 </p>
                                 <p className="mt-4 sm:mt-5 font-body font-light italic tracking-[0.02em] text-[14px] leading-[24px] sm:text-[15px] sm:leading-[26px] md:text-[17px] md:leading-[28px] lg:text-[16px] lg:leading-[26px] xl:text-[18px] xl:leading-[30px] 2xl:text-[20px] 2xl:leading-[32px]">
-                                    A partnership rooted in trust, perspective, and a shared commitment to excellence. Together, Winnie and Tosin create celebrations that ARE thoughtful, refined, and deeply meaningful — where every element is considered, every moment intentional, and every experience elevated.
+                                    A partnership rooted in trust, perspective, and a shared commitment to excellence. Together, Winnie and Tosin create thoughtful, refined, and deeply meaningful celebrations—where every element is considered, every moment intentional, and every experience elevated.
                                 </p>
                             </div>
                         </div>

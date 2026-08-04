@@ -2,10 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 
 const instagramImages = [
-  "/images/hero/herofive.jpg",
+  "/images/testimonial/testimonialone.jpg",
   "/images/insta/instagramtwo.jpg",
   "/images/insta/instagramthree.jpg",
-  "/images/intro/introfive.jpg",
+  "/images/portfoliopage/portfolioeight.jpg",
 ];
 
 export default function Instagram() {

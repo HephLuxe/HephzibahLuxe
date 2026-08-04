@@ -63,13 +63,13 @@ export default function AboutHero() {
             style={{ top: POS.paragraphs.top, left: POS.paragraphs.left, width: POS.paragraphs.w }}
           >
             <p className="font-body font-light text-primary text-[19px] leading-[31px] tracking-[-0.005em] mb-6">
-              Hephzibah Luxe was born from years of experience long before it had a name. For over a decade, we planned informally — bringing together family celebrations, milestone moments, and meaningful gatherings with care, precision, and heart. What began as a natural calling evolved into a refined practice shaped by trust, relationships, and an understanding of what truly makes a celebration memorable.
+              Hephzibah Luxe was born from years of experience long before it had a name. For over a decade, we planned organically—bringing together family celebrations, milestone moments, and meaningful gatherings with care, precision, and heart. What began as a natural calling evolved into a refined practice shaped by trust, relationships, and an understanding of what truly makes a celebration memorable.
             </p>
             <p className="font-body font-light text-primary text-[19px] leading-[31px] tracking-[-0.005em] mb-6">
-              Rooted in faith and inspired by God, Hephzibah Luxe is guided by the belief that celebrations are sacred moments — worthy of intention, beauty, and excellence. Through long-standing relationships with a trusted network of vendors, we curate experiences that feel seamless, thoughtful, and elevated.
+              Rooted in faith and inspired by God, Hephzibah Luxe is guided by the belief that celebrations are sacred moments—worthy of intention, beauty, and excellence. Through long-standing relationships with a trusted network of vendors, we curate experiences that feel seamless, thoughtful, and elevated.
             </p>
             <p className="font-body font-light text-primary text-[19px] leading-[31px] tracking-[-0.005em]">
-              Today, Hephzibah Luxe blends heritage with modern execution. Design sits at the heart of everything we do, combining creative direction with thoughtful planning systems to offer a more refined way to plan — one that prioritises clarity, collaboration, and ease, while honouring each couple&apos;s individuality.
+              Today, Hephzibah Luxe blends heritage with modern execution. Design sits at the heart of everything we do, combining creative direction with thoughtful planning systems to offer a more refined way to plan—one that prioritises clarity, collaboration, and ease while honouring each client&apos;s individuality.
             </p>
           </div>
 
@@ -97,12 +97,12 @@ export default function AboutHero() {
             className="absolute"
             style={{
               top: POS.bottomRightImg.top,
-              right: -115,
+              right: -50,
               width: POS.bottomRightImg.w,
               height: POS.bottomRightImg.h,
             }}
           >
-            <Image src="/images/aboutpage/aboutthree.jpg" alt="" fill className="object-cover" sizes="260px" />
+            <Image src="/images/aboutpage/aboutthree.jpg" alt="" fill className="object-contain" sizes="260px" />
           </div>
         </div>
       </div>
@@ -135,36 +135,36 @@ export default function AboutHero() {
           </div>
 
           <p className="mb-3 sm:mb-3 md:mb-4">
-            Hephzibah Luxe was born from years of experience long before it had a name. For over a decade, we planned informally — bringing together family celebrations, milestone moments, and meaningful gatherings with care, precision, and heart. What began as a natural calling evolved into a refined practice shaped by trust, relationships, and an understanding of what truly makes a celebration memorable.
+            Hephzibah Luxe was born from years of experience long before it had a name. For over a decade, we planned organically—bringing together family celebrations, milestone moments, and meaningful gatherings with care, precision, and heart. What began as a natural calling evolved into a refined practice shaped by trust, relationships, and an understanding of what truly makes a celebration memorable.
           </p>
           <p className="mb-3 sm:mb-3 md:mb-4">
-            Rooted in faith and inspired by God, Hephzibah Luxe is guided by the belief that celebrations are sacred moments — worthy of intention, beauty, and excellence. Through long-standing relationships with a trusted network of vendors, we curate experiences that feel seamless, thoughtful, and elevated.
+            Rooted in faith and inspired by God, Hephzibah Luxe is guided by the belief that celebrations are sacred moments—worthy of intention, beauty, and excellence. Through long-standing relationships with a trusted network of vendors, we curate experiences that feel seamless, thoughtful, and elevated.
           </p>
 
           {/* Paragraph 3 — mobile splits text into two parts so it wraps ABOVE and BESIDE the absolute bottom image (never under). sm+: hidden/visible flip restores the original single-paragraph + float behavior. */}
 
           {/* MOBILE ONLY: first part — full width, wraps above the image */}
           <p className="sm:hidden mb-0">
-            Today, Hephzibah Luxe blends heritage with modern execution. Design sits at the heart of everything we do, combining creative direction with thoughtful planning systems to offer a more refined way to plan — one that prioritises clarity,{" "}
+            Today, Hephzibah Luxe blends heritage with modern execution. Design sits at the heart of everything we do, combining creative direction with thoughtful planning systems to offer a more refined way to plan—one that prioritises clarity,{" "}
           </p>
           {/* MOBILE ONLY: second part — right column reserved so this text sits beside the image */}
           <p className="pb-12 sm:hidden pr-[44%]">
-            collaboration, and ease, while honouring each couple&apos;s individuality.
+            collaboration, and ease while honouring each client&apos;s individuality.
           </p>
 
           {/* sm+ ONLY: original single paragraph with float-right span — iPad / iPad Pro / desktop behavior unchanged */}
           <p className="hidden sm:block">
             Today, Hephzibah Luxe blends heritage with modern execution.{" "}
             <span className="float-right relative sm:w-[38%] md:w-[30%] aspect-[4/3] sm:-mr-10 md:-mr-12 ml-4 mb-0 overflow-hidden block">
-              <Image src="/images/aboutpage/aboutthree.jpg" alt="" fill className="object-cover" sizes="40vw" />
+              <Image src="/images/aboutpage/aboutthree.jpg" alt="" fill className="object-contain" sizes="40vw" />
             </span>
-            Design sits at the heart of everything we do, combining creative direction with thoughtful planning systems to offer a more refined way to plan — one that prioritises clarity, collaboration, and ease, while honouring each couple&apos;s individuality.
+            Design sits at the heart of everything we do, combining creative direction with thoughtful planning systems to offer a more refined way to plan—one that prioritises clarity, collaboration, and ease while honouring each client&apos;s individuality.
           </p>
         </div>
 
         {/* MOBILE ONLY — bottom-right image pinned to the lg:hidden wrapper's bottom-right corner. Section grows to contain text only; image overlays the bottom-right corner with no gap below. */}
         <div className="sm:hidden absolute bottom-0 -right-8 w-[40%] aspect-[4/3] overflow-hidden z-10">
-          <Image src="/images/aboutpage/aboutthree.jpg" alt="" fill className="object-cover" sizes="40vw" />
+          <Image src="/images/aboutpage/aboutthree.jpg" alt="" fill className="object-contain" sizes="40vw" />
         </div>
       </div>
     </section>

@@ -39,11 +39,10 @@ export default function PortfolioEvents() {
                 key={filter}
                 type="button"
                 onClick={() => setActiveFilter(filter)}
-                className={`font-sans font-light leading-[184%] tracking-[-0.03em] text-center whitespace-nowrap pb-1 transition-colors text-[13px] sm:text-[14px] md:text-[18px] lg:text-[20px] xl:text-[22px] 2xl:text-[24px] ${
-                  isActive
+                className={`font-sans font-light leading-[184%] tracking-[-0.03em] text-center whitespace-nowrap pb-1 transition-colors text-[13px] sm:text-[14px] md:text-[18px] lg:text-[20px] xl:text-[22px] 2xl:text-[24px] ${isActive
                     ? "text-primary border-b-2 border-primary"
                     : "text-primary/70 hover:text-primary"
-                }`}
+                  }`}
               >
                 {filter}
               </button>
@@ -55,7 +54,7 @@ export default function PortfolioEvents() {
         {visibleEvents.length === 0 ? (
           <div className="flex flex-col items-center text-center py-12 sm:py-16 md:py-18 lg:py-20 xl:py-24 mx-auto">
             <h3 className="font-display font-thin tracking-[0.01em] text-primary lg:whitespace-nowrap text-[28px] leading-[120%] sm:text-[32px] sm:leading-[120%] md:text-[36px] md:leading-[115%] lg:text-[42px] lg:leading-[110%] xl:text-[48px] xl:leading-[110%] 2xl:text-[54px] 2xl:leading-[110%]">
-              Your Celebration Could Be The Next Story We Tell
+              Your Celebration Could Be the Next Story We Tell
             </h3>
             <p className="mt-6 sm:mt-7 md:mt-8 font-body font-light italic text-primary text-[15px] leading-[26px] sm:text-[16px] sm:leading-[28px] md:text-[18px] md:leading-[30px] lg:text-[17px] lg:leading-[28px] xl:text-[19px] xl:leading-[32px] 2xl:text-[21px] 2xl:leading-[34px] max-w-[560px] xl:max-w-[640px] 2xl:max-w-[720px]">
               We design {activeFilter === "Social Events" ? "social events" : activeFilter.toLowerCase()} {" "} with intention, warmth, and refined detail — always centred around you. Ready to Begin? Let&apos;s create something amazing
@@ -66,7 +65,7 @@ export default function PortfolioEvents() {
               className="group mt-10 sm:mt-11 md:mt-12 xl:mt-14 inline-flex items-center gap-4 border border-primary px-6 py-3 md:px-7 md:py-3.5 xl:px-8 xl:py-4 transition-colors hover:bg-primary"
             >
               <span className="font-body font-light italic text-primary group-hover:text-background transition-colors text-[16px] leading-[26px] sm:text-[17px] md:text-[18px] lg:text-[18px] xl:text-[20px] 2xl:text-[22px]">
-                Send us a message
+                Share Your Vision
               </span>
               <Image
                 src="/icons/buttonarrow.svg"
@@ -89,30 +88,27 @@ export default function PortfolioEvents() {
             {/* Laptop+: 3-2-3-2 row pattern */}
             <div className="hidden lg:flex flex-col gap-y-14 xl:gap-y-16 2xl:gap-y-20">
               {rows.map((rowEvents, rowIdx) => {
-                // If only one event in this row, render it at 3-column width inside a 3-col grid
-                if (rowEvents.length === 1) {
+                // 1 event OR 2 events → render inside a 3-col grid so cards stay at 3-col width
+                if (rowEvents.length === 1 || rowEvents.length === 2) {
                   return (
                     <div
                       key={rowIdx}
                       className="grid grid-cols-3 gap-8 xl:gap-10 2xl:gap-12"
                     >
-                      <EventCard event={rowEvents[0]} />
+                      {rowEvents.map((event) => (
+                        <EventCard key={event.slug} event={event} />
+                      ))}
                     </div>
                   );
                 }
+                // 3 events → full 3-column row
                 return (
                   <div
                     key={rowIdx}
-                    className={`grid gap-8 xl:gap-10 2xl:gap-12 ${
-                      rowEvents.length === 3 ? "grid-cols-3" : "grid-cols-2"
-                    }`}
+                    className="grid grid-cols-3 gap-8 xl:gap-10 2xl:gap-12"
                   >
                     {rowEvents.map((event) => (
-                      <EventCard
-                        key={event.slug}
-                        event={event}
-                        compact={rowEvents.length === 2}
-                      />
+                      <EventCard key={event.slug} event={event} />
                     ))}
                   </div>
                 );
@@ -129,9 +125,8 @@ function EventCard({ event, compact = false }: { event: PortfolioEvent; compact?
   return (
     <Link href={`/portfolio/${event.slug}`} className="group block">
       <div
-        className={`relative w-full overflow-hidden ${
-          compact ? "aspect-[3/4] lg:aspect-[5/4]" : "aspect-[3/4]"
-        }`}
+        className={`relative w-full overflow-hidden ${compact ? "aspect-[3/4] lg:aspect-[5/4]" : "aspect-[3/4]"
+          }`}
       >
         <Image
           src={event.coverImage}

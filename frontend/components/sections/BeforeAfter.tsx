@@ -6,7 +6,7 @@ export default function BeforeAfter() {
     <section className="bg-background text-primary">
       <div className="flex flex-col items-center px-6 py-20 sm:px-8 sm:py-24 md:px-10 md:py-28 lg:px-12 lg:py-32 xl:px-16 xl:py-36 2xl:px-20 2xl:py-40">
         <p className="font-display font-thin text-center tracking-[0] text-primary text-[22px] leading-[37px] sm:text-[26px] sm:leading-[42px] md:text-[32px] md:leading-[48px] lg:text-[40px] lg:leading-[55px] xl:text-[46px] xl:leading-[62px] 2xl:text-[52px] 2xl:leading-[70px] max-w-[1000px] xl:max-w-[1200px] 2xl:max-w-[1400px]">
-          Our work goes beyond planning — it&apos;s about reimagining spaces with intention and care. Explore how thoughtful design transforms familiar settings into meaningful, elevated celebrations. These before-and-after moments reveal how vision and design can completely change the way a space feels.
+          Our work goes beyond planning — it&apos;s about reimagining spaces with intention and care. Explore how thoughtful design transforms familiar settings into meaningful, elevated celebrations. These before-and-after moments reveal how vision and design can completely transform a space.
         </p>
 
         <Link

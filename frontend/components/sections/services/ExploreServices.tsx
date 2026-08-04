@@ -9,25 +9,25 @@ const services = [
         image: "/images/portfoliopage/portfoliotwo.jpg",
         title: "Weddings",
         description:
-            "Thoughtfully planned weddings that honour your story, your culture, and your vision — guided with care from the first conversation to the final moment.",
+            "Thoughtfully planned weddings that honour your story, your culture, and your vision—guided with care from the first conversation to the final farewell.",
     },
     {
-        image: "/images/servicespage/birthday.jpg",
+        image: "/images/servicespage/birthdays.jpg",
         title: "Birthdays & Milestones",
         description:
-            "From intimate dinners to meaningful milestones, we curate celebrations that feel personal, refined, and beautifully considered — shaped to honour the moment and the people gathered to celebrate it.",
+            "From birthdays and anniversaries to life's meaningful milestones, we create celebrations that feel personal, refined, and beautifully considered—honouring the occasion and the people at its heart.",
     },
     {
         image: "/images/intro/introfive.jpg",
         title: "Corporate & Brand Events",
         description:
-            "Polished, intentional events designed to reflect your brand, engage your guests, and deliver a seamless, elevated experience from arrival to conclusion.",
+            "Polished, intentional events designed to reflect your brand, engage your guests, and deliver a seamless experience from arrival to farewell.",
     },
     {
         image: "/images/hero/heroone.jpg",
         title: "Private Events & Social Gatherings",
         description:
-            "Private dinners, proposals, naming ceremonies, and intimate gatherings — thoughtfully shaped moments, held with the same care and intention as our largest celebrations.",
+            "From proposals and naming ceremonies to private dinners and intimate gatherings, every celebration is thoughtfully planned with the same care, intention, and attention to detail as our largest events.",
     },
 ];
 

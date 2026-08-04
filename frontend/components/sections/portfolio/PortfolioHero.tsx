@@ -7,14 +7,11 @@ const portfolioImages = [
   "/images/portfoliopage/portfolioone.jpg",
   "/images/portfoliopage/portfoliotwo.jpg",
   "/images/portfoliopage/portfoliothree.jpg",
-  "/images/portfoliopage/portfoliofour.jpg",
   "/images/portfoliopage/portfoliofive.jpg",
-  "/images/portfoliopage/portfoliosix.jpg",
-  "/images/portfoliopage/portfolioseven.jpg",
-  "/images/portfoliopage/portfolioeight.jpg",
-  "/images/portfoliopage/portfolionine.jpg",
-  "/images/portfoliopage/portfolioten.jpg",
-  "/images/portfoliopage/portfolioeleven.jpg",
+  "/images/portfoliopage/newportfolioone.jpg",
+  "/images/portfoliopage/newportfoliotwo.jpg",
+  "/images/portfoliopage/newportfoliothree.jpg",
+  "/images/portfoliopage/newportfoliofour.jpg",
 ];
 
 export default function PortfolioHero() {

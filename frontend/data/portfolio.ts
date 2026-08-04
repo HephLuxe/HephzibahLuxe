@@ -37,20 +37,20 @@ export const portfolioEvents: PortfolioEvent[] = [
     title: "A Golden 50th: An Intimate Two-Day Celebration of Family, Faith & Joy",
     coverImage: "/images/portfoliopage/portfoliotwelve.jpg",
     description: [
-      "Turning fifty was not simply marked with a single event, but thoughtfully honoured across two days that reflected a life rich in love, faith, and meaningful connection. Set within the comfort of home and the familiarity of community, the celebration unfolded gently — beginning with a heartfelt gathering of close family and friends, and continuing into a joyful occasion filled with laughter, music, and shared moments.",
-      "Rooted in gratitude and guided by intention, each element of the experience prioritised togetherness over grandeur. From the warmth of a thanksgiving gathering to the vibrancy of a celebratory party, the weekend felt deeply personal — a reflection of a life well-lived and the people who have shaped it.",
-      "The result was a celebration that felt less like an event, and more like a beautiful continuation of legacy — intimate, sincere, and filled with joy.",
+      "Turning fifty was not simply marked with a single event, but thoughtfully celebrated across two days that reflected a life rich in love, faith, and meaningful connection. Set within the comfort of home and the familiarity of community, the celebration unfolded gently—beginning with a heartfelt gathering of close family and friends before continuing into a joyful occasion filled with laughter, music, and shared moments.",
+      "Rooted in gratitude and guided by intention, every element of the experience prioritised togetherness over grandeur. From the warmth of a thanksgiving gathering to the vibrancy of a celebratory party, the weekend felt deeply personal—a reflection of a life well lived and the people who helped shape it.",
+      "The result was a celebration that felt less like an event and more like a beautiful continuation of a legacy—intimate, sincere, and filled with joy.",
     ],
     subEvents: [
       {
         subtitle: "Pre-Birthday Photoshoot",
-        title: "A Moment Before Fifty — The Pre-Birthday Portrait Experience",
+        title: "A Moment Before Fifty — A Pre-Birthday Portrait Experience",
         image: "/images/portfoliopage/goldenone.jpg",
         slug: "pre-birthday-photoshoot",
         description: [
-          "Before the celebrations began, there was a quiet moment to pause — to honour the woman at the centre of it all, and the milestone she was about to step into. This pre-birthday portrait session was designed to capture not just an age, but a new season of life marked by grace, confidence, and depth.",
-          "Rather than relying on an elaborate setting, the focus remained intentionally simple. With a clean, understated backdrop, every detail was drawn back to what mattered most — her presence, her expression, and the story carried in each frame.",
-          "The result was a series of portraits that felt both timeless and deeply personal — a gentle yet powerful reflection of a life beautifully lived, and the elegance of stepping into fifty.",
+          "Before the celebrations began, there was a quiet moment to pause—to honour the woman at the heart of it all and the milestone she was about to embrace. This pre-birthday portrait session was designed to capture not simply an age, but a new season of life marked by grace, confidence, and quiet strength.",
+          "Rather than relying on an elaborate setting, the experience remained intentionally understated. With a clean backdrop, every detail drew the focus back to what mattered most—her presence, her expression, and the story reflected in every frame.",
+          "The result was a collection of portraits that felt timeless and deeply personal—a quiet yet powerful reflection of a life beautifully lived and the elegance of stepping into fifty.",
         ],
         gallery: [
           {
@@ -79,7 +79,7 @@ export const portfolioEvents: PortfolioEvent[] = [
           {
             type: "testimonial",
             quote:
-              "I wanted something simple, but meaningful — and that's exactly what this was. Every detail felt intentional, and the photos captured me in such a beautiful and authentic way. There was a quiet attention to detail that made me feel completely at ease, and that really reflected in the final images. What I loved most is that the focus never shifted away from me. It truly felt like the perfect way to step into fifty.",
+              "I wanted something simple but meaningful—and that's exactly what this was. Every detail felt intentional, and the photos captured me in such a beautiful, authentic, and timeless way. There was a quiet attention to detail that made me feel completely at ease, and it truly showed in the final images. What I loved most was that the focus never shifted away from me. It felt like the perfect way to step into fifty.",
             attribution: "Winnie, Celebrant",
           },
           {
@@ -117,9 +117,9 @@ export const portfolioEvents: PortfolioEvent[] = [
   image: "/images/portfoliopage/goldentwo.jpg",
   slug: "thanksgiving-gathering",
   description: [
-    "The celebration began with a quiet and meaningful gathering centred on gratitude, faith, and reflection. Surrounded by close family, church members, and loved ones, the moment unfolded with a sense of calm reverence — a gentle pause before the festivities to give thanks for a life richly lived.",
-    "Led in prayer by the family pastor, the gathering created space for heartfelt words, blessings, and collective reflection. It was less about formality, and more about presence — a coming together of community in honour of the journey thus far and the years ahead.",
-    "Following the prayers, guests shared in light refreshments, conversations, and warm fellowship. The atmosphere remained simple yet deeply meaningful — a beautiful reminder that at the heart of every celebration lies gratitude, faith, and the people who walk life alongside you.",
+    "The celebration began with a quiet and meaningful gathering centred on gratitude, faith, and reflection. Surrounded by close family, church members, and loved ones, the occasion unfolded with a sense of calm reverence—a gentle pause before the festivities to give thanks for a life richly lived.",
+    "Led in prayer by the family pastor, the gathering created space for heartfelt words, blessings, and shared reflection. It was less about formality and more about presence—a coming together of community to honour the journey thus far and the years ahead.",
+    "Following the prayers, guests shared light refreshments, warm conversation, and meaningful fellowship. The atmosphere remained simple yet deeply moving—a beautiful reminder that at the heart of every celebration are gratitude, faith, and the people who walk through life beside you.",
   ],
   gallery: [
     {
@@ -142,7 +142,7 @@ export const portfolioEvents: PortfolioEvent[] = [
     {
       type: "testimonial",
       quote:
-        "This moment meant so much more to me than I can fully express. To be surrounded by people who have walked this journey with me, lifting me up in prayer and sharing in this time of thanksgiving… it was truly special. It reminded me of how blessed I am, not just for the years, but for the love, the support, and the grace that has carried me through them. I'm so thankful to God for how far He has brought me, and for the people He has placed in my life.",
+        "This moment meant so much more to me than I can fully express. To be surrounded by the people who have walked this journey with me, lifting me up in prayer and sharing in this time of thanksgiving, was truly special. It reminded me of how blessed I am—not just for the years, but for the love, support, and grace that have carried me through them. I'm so thankful to God for how far He has brought me and for the people He has placed in my life.",
       attribution: "Winnie, Celebrant",
     },
     {
@@ -173,13 +173,13 @@ export const portfolioEvents: PortfolioEvent[] = [
 },
 {
   subtitle: "Event No. 2",
-  title: "Fifty, Unforgettable — A Night of Music, Dance & Pure Celebration",
+  title: "Fifty, Unforgettable — An Evening of Music, Dance & Celebration",
   image: "/images/portfoliopage/goldenthree.jpg",
   slug: "celebration-night",
   description: [
-    "If the earlier gathering was a quiet moment of reflection, this evening was its joyful release. As night fell, the atmosphere shifted into one of vibrant celebration — a space filled with music, movement, and the unmistakable energy of people coming together to honour a life well lived.",
-    "Friends and family gathered not just to mark a milestone, but to truly celebrate it. The room came alive with laughter, dancing, and moments of pure joy, as every guest became part of the experience. It was effortless, spirited, and full of life — the kind of celebration where time seems to soften, and all that remains is the rhythm of the moment.",
-    "At the centre of it all was the celebrant — radiant, joyful, and fully present — surrounded by love and celebration in its most expressive form. It was not just a party, but a night that felt unforgettable in every sense: vibrant, meaningful, and beautifully alive.",
+    "If the earlier gathering was a quiet moment of reflection, this evening was its joyful release. As night fell, the atmosphere shifted into one of vibrant celebration—a space filled with music, movement, and the unmistakable energy of loved ones coming together to honour a life well lived.",
+    "Friends and family gathered not simply to mark a milestone, but to celebrate it wholeheartedly. The room came alive with laughter, dancing, and shared joy as every guest became part of the experience. It was effortless, spirited, and full of life—the kind of celebration where time seems to soften and all that remains is the rhythm of the evening.",
+    "At the heart of it all was the celebrant—radiant, joyful, and fully present—surrounded by love in its most expressive form. It was more than a party; it was an unforgettable evening filled with vibrancy, meaning, and celebration.",
   ],
   gallery: [
     {
@@ -215,7 +215,7 @@ export const portfolioEvents: PortfolioEvent[] = [
     {
       type: "testimonial",
       quote:
-        "I told myself that when it was time to celebrate, I was going to celebrate fully — and this night was exactly that. From the music to the dancing to the laughter, every moment felt alive. To be surrounded by so much love and joy, all in one room, was something I will never forget.",
+        "I told myself that when the time came to celebrate, I was going to celebrate fully—and this night was exactly that. From the music and dancing to the laughter, every moment felt alive. To be surrounded by so much love and joy, all in one room, is something I'll never forget.",
       attribution: "Winnie, Celebrant",
     },
     {
@@ -256,9 +256,9 @@ export const portfolioEvents: PortfolioEvent[] = [
   title: "An Intimate 85th: A Celebration of Grace, Family & Legacy",
   coverImage: "/images/portfoliopage/portfoliothirteen.jpg",
   description: [
-    "Eighty-five years of life, love, faith, and family were gently honoured through an intimate gathering centred on togetherness and gratitude. Surrounded by children, grandchildren, close friends, and loved ones, the celebration created space to reflect on a legacy shaped by wisdom, care, and enduring strength.",
-    "Designed to feel warm, personal, and deeply meaningful, the experience prioritised connection over formality — allowing guests to celebrate not only a milestone birthday, but the remarkable woman at the heart of it all. From heartfelt conversations to joyful shared moments, every detail contributed to an atmosphere that felt sincere, graceful, and full of love.",
-    "The result was a quiet yet beautiful celebration of legacy — one that honoured a life well-lived and the generations touched by it.",
+    "Eighty-five years of life, love, faith, and family were gently honoured through an intimate gathering centred on togetherness and gratitude. Surrounded by children, grandchildren, close friends, and loved ones, the celebration created space to reflect on a legacy shaped by wisdom, compassion, and enduring strength.",
+    "Designed to feel warm, personal, and deeply meaningful, the experience prioritised connection over formality, allowing guests to celebrate not only a milestone birthday, but the remarkable woman at its heart. From heartfelt conversations to joyful moments of togetherness, every detail contributed to an atmosphere that felt sincere, graceful, and filled with love.",
+    "The result was a quiet yet beautiful celebration of legacy—one that honoured a life well lived and the generations inspired by it.",
   ],
   gallery: [
     { type: "images", images: ["/images/portfoliopage/legacyone.jpg"] },
@@ -288,7 +288,7 @@ export const portfolioEvents: PortfolioEvent[] = [
     {
       type: "testimonial",
       quote:
-        "With very little time to plan, we were unsure how everything would come together, but Hephzibah Luxe handled the experience with such care and calmness. Watching our mother celebrate alongside her church community, family, and close friends was incredibly special, and the atmosphere felt warm, graceful, and genuinely reflective of her life and faith.",
+        "With very little time to plan, we weren't sure how everything would come together, but Hephzibah Luxe handled every detail with such care and calmness. Watching our mother celebrate alongside her church community, family, and close friends was incredibly special, and the atmosphere felt warm, graceful, and a true reflection of her life and faith.",
       attribution: "Olamipe, Daughter of Celebrant",
     },
     {
@@ -331,12 +331,12 @@ export const portfolioEvents: PortfolioEvent[] = [
     category: "Corporate",
     location: "Lagos, Nigeria",
     year: 2026,
-    title: "Lagos State Government (OPL& CE) MSME Engagement Forum",
+    title: "Lagos State Government MSME Engagement Forum",
     coverImage: "/images/portfoliopage/portfoliofourteen.jpg",
     description: [
     "This corporate seminar was designed to bring together stakeholders for a meaningful conversation around social responsibility and community impact. Hosted in collaboration with the Lagos State Government, the event welcomed guests for an afternoon of discussion, knowledge sharing, and collective reflection.",
-    "Hephzibah Luxe supported the planning and coordination of the experience, ensuring a smooth guest journey from arrival through the programme. From registration and seating flow to hospitality and on-site coordination, every detail was carefully managed to create an organised and welcoming environment for both speakers and attendees.",
-    "The result was a thoughtful and purposeful gathering that prioritised connection, dialogue, and a shared vision for positive community engagement.",
+    "With just five days from planning to execution, Hephzibah Luxe supported the coordination of the experience with clarity and precision, ensuring a seamless guest journey from arrival through to the close of the programme. From registration and seating flow to hospitality and on-site coordination, every detail was carefully managed to create an organised, welcoming environment for both speakers and attendees.",
+    "The result was a thoughtful and purposeful gathering that fostered meaningful dialogue, strengthened connections, and reflected a shared commitment to positive community impact.",
   ],
   gallery: [
     {

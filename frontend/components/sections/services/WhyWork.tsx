@@ -2,24 +2,24 @@ import Image from "next/image";
 
 const points = [
   {
-    title: "More Than Planning — We Shape Unforgettable Experiences",
+    title: "More Than Planning — We Create Meaningful Experiences",
     description:
-      "We don't just organise events; we curate how they feel. From the first interaction to the final moment, our focus is on creating celebrations that are seamless, thoughtful, and effortless to enjoy.",
+      "Planning is only part of what we do. We shape how each celebration feels—from the first conversation to the final farewell—creating experiences that are seamless, deeply personal, and effortless to enjoy.",
   },
   {
-    title: "What Makes Us Different? — We Start by Listening",
+    title: "Every Celebration Begins with Listening",
     description:
-      "We listen and take time to understand your vision. With experience, imagination, and trusted creative partners, we bring your most meaningful ideas to life.",
+      "Every celebration begins with understanding your story, priorities, and vision. We take time to ask questions, explore the details that matter most, and build every decision around what feels authentic to you.",
   },
   {
-    title: "Guided With Care, Executed With Precision",
+    title: "Guided with Care. Executed with Precision",
     description:
-      "With a steady, gentle hand, we take care of what happens behind the scenes — the details, the coordination, the flow — so you're free to be fully present, unburdened, and immersed in the celebration.",
+      "Behind every effortless celebration is thoughtful planning, seamless coordination, and attention to detail. We manage every moving part so you can be fully present and celebrate with confidence.",
   },
   {
     title: "Thoughtfully Redefining Luxury",
     description:
-      "Extraordinary celebrations aren't reserved for only the grandest budgets. With clarity, creativity, and intention, we craft beautiful, elevated experiences at every scale — ensuring each event feels special.",
+      "We believe exceptional celebrations aren't defined by budget. Through creativity, intention, and thoughtful design, we create elevated experiences at every scale.",
   },
 ];
 
