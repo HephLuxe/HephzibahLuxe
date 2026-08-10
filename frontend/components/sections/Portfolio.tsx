@@ -2,12 +2,13 @@ import Image from "next/image";
 import Link from "next/link";
 
 const portfolioImages = [
-  "/images/portfoliopage/portfoliotwo.jpg",
-  "/images/portfoliopage/portfoliofive.jpg",
   "/images/portfoliopage/portfoliosix.jpg",
+  "/images/hero/herofours.jpg",
+  "/images/portfoliopage/portfoliofive.jpg",
+  "/images/portfoliopage/portfoliotwo.jpg",
   "/images/portfoliopage/portfolioeight.jpg",
   "/images/portfoliopage/portfolionine.jpg",
-  "/images/hero/herofours.jpg",
+
 ];
 
 export default function Portfolio() {

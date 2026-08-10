@@ -26,8 +26,8 @@ const points = [
 export default function WhyWork() {
   return (
     <section className="bg-secondary text-background py-16 sm:py-20 md:py-24 lg:py-24 xl:py-28 2xl:py-32 overflow-hidden">
-      <div className="px-6 sm:px-8 md:px-10 lg:px-12 xl:px-16 2xl:px-20">
-        <div className="grid grid-cols-1 lg:grid-cols-[40%_60%] gap-10 lg:gap-10 xl:gap-10 2xl:gap-24 items-start">
+      <div className="px-6 sm:px-8 md:px-10 lg:px-12 xl:px-16 2xl:px-20 pr-6 sm:pr-10 md:pr-14 lg:pr-20 xl:pr-28 2xl:pr-40">
+        <div className="grid grid-cols-1 lg:grid-cols-[45%_55%] gap-8 lg:gap-8 xl:gap-8 2xl:gap-10 items-start">
           {/* Image — second on mobile, first on desktop */}
           <div className="order-2 lg:order-1 relative w-full aspect-[4/5] sm:aspect-[3/4] md:aspect-[5/6] lg:aspect-auto lg:h-full lg:min-h-[700px] xl:min-h-[800px] 2xl:min-h-[900px] overflow-hidden">
             <Image

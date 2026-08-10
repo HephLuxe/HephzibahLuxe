@@ -4,9 +4,9 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 
 const portfolioImages = [
-  "/images/portfoliopage/portfolioone.jpg",
+  "/images/portfoliopage/portfolioonee.jpg",
   "/images/portfoliopage/portfoliotwo.jpg",
-  "/images/portfoliopage/portfoliothree.jpg",
+  "/images/intro/introfives.jpg",
   "/images/portfoliopage/portfoliofive.jpg",
   "/images/portfoliopage/newportfolioone.jpg",
   "/images/portfoliopage/newportfoliotwo.jpg",

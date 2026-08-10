@@ -116,7 +116,7 @@ export default function InquiryForm({ onSubmitted }: InquiryFormProps) {
           </h2>
 
           <p className="mt-8 sm:mt-9 md:mt-10 font-body font-light text-primary text-[16px] leading-[24px] sm:text-[16px] sm:leading-[26px] md:text-[18px] md:leading-[28px] lg:text-[16px] lg:leading-[25px] xl:text-[18px] xl:leading-[28px] 2xl:text-[20px] 2xl:leading-[30px] max-w-[1100px] xl:max-w-[1200px] 2xl:max-w-[1320px]">
-            We value each inquiry deeply, and we&apos;re excited to explore how we can bring grace, beauty, and excellence to your event. From weddings to milestone birthdays to elevated corporate gatherings, we design experiences that are intentional, refined, and unforgettable. Kindly share your details below, and our team will connect with you within 1-2 business days.
+            We value every inquiry and would be delighted to learn more about your celebration. From weddings and milestone birthdays to elevated corporate gatherings, we create experiences that are intentional, refined, and unforgettable. Simply share your details below, and our team will be in touch within 1–2 business days.
           </p>
 
           <p className="mt-4 font-body font-light text-primary text-[16px] leading-[24px] sm:text-[16px] sm:leading-[26px] md:text-[18px] md:leading-[28px] lg:text-[16px] lg:leading-[25px] xl:text-[18px] xl:leading-[28px] 2xl:text-[20px] 2xl:leading-[30px]">
@@ -137,11 +137,11 @@ export default function InquiryForm({ onSubmitted }: InquiryFormProps) {
           {/* Section: Tell Us about Yourself */}
           <div className="mt-16 sm:mt-16 md:mt-20 lg:mt-20 xl:mt-24">
             <h3 className="font-body font-light italic tracking-[-0.01em] text-primary text-[22px] leading-[100%] sm:text-[24px] md:text-[26px] lg:text-[28px] xl:text-[32px] 2xl:text-[36px] pb-4 lg:pb-5 xl:pb-6 border-b border-primary/30">
-              Tell Us about Yourself
+              Tell Us About Yourself
             </h3>
 
             <p className="mt-6 sm:mt-7 md:mt-8 font-body font-light text-primary text-[16px] leading-[22px] sm:text-[15px] sm:leading-[24px] md:text-[18px] md:leading-[28px] lg:text-[16px] lg:leading-[25px] xl:text-[18px] xl:leading-[28px] 2xl:text-[20px] 2xl:leading-[30px] max-w-[900px] xl:max-w-[1040px] 2xl:max-w-[1160px]">
-              Let&apos;s begin with the essentials — how we can reach you. Your contact details ensure we reach out promptly and continue this conversation with the care and attention your event deserves.
+              Let&apos;s begin with the essentials—how we can best reach you. Your contact details allow us to begin the conversation and respond with the care, attention, and thoughtfulness your celebration deserves.
             </p>
 
             <div className="mt-8 sm:mt-9 md:mt-10 grid grid-cols-1 gap-5">
@@ -185,7 +185,7 @@ export default function InquiryForm({ onSubmitted }: InquiryFormProps) {
                 </div>
               </div>
               <FloatingSelect
-                label="Your Preferred method of contact"
+                label="Your Preferred Method of Contact"
                 required
                 options={["Email Address", "Phone Number"]}
                 value={contactMethod}
@@ -197,16 +197,16 @@ export default function InquiryForm({ onSubmitted }: InquiryFormProps) {
           {/* Section: Tell Us about Your Event */}
           <div className="mt-16 sm:mt-16 md:mt-20 lg:mt-20 xl:mt-24">
             <h3 className="font-body font-light italic tracking-[-0.01em] text-primary text-[22px] leading-[100%] sm:text-[24px] md:text-[26px] lg:text-[28px] xl:text-[32px] 2xl:text-[36px] pb-4 lg:pb-5 xl:pb-6 border-b border-primary/30">
-              Tell Us about Your Event
+              Tell Us About Your Event
             </h3>
 
             <p className="mt-6 sm:mt-7 md:mt-8 font-body font-light text-primary text-[16px] leading-[22px] sm:text-[15px] sm:leading-[24px] md:text-[18px] md:leading-[28px] lg:text-[16px] lg:leading-[25px] xl:text-[18px] xl:leading-[28px] 2xl:text-[20px] 2xl:leading-[30px] max-w-[900px] xl:max-w-[1040px] 2xl:max-w-[1160px]">
-              Now, tell us a little about your celebration — whether it&apos;s a wedding, birthday, or corporate event. These details help us understand your vision and begin shaping an experience that feels intentional, elegant, and uniquely yours.
+              Now, tell us a little about your event—whether it&apos;s a wedding, milestone birthday, corporate gathering, or private celebration. These details help us understand your vision and begin shaping an experience that feels intentional, refined, and uniquely yours.
             </p>
 
             <div className="mt-8 sm:mt-9 md:mt-10 grid grid-cols-1 gap-5">
               <FloatingSelect
-                label="What type of event are you planning?"
+                label="What Type of Event Are You Planning?"
                 required
                 options={[
                   "Wedding",
@@ -218,7 +218,7 @@ export default function InquiryForm({ onSubmitted }: InquiryFormProps) {
                 onChange={setEventType}
               />
               <DateRangePicker
-                label="What are your preferred date(s)?"
+                label="What Are Your Preferred Dates? "
                 required
                 startDate={startDate}
                 endDate={endDate}
@@ -226,23 +226,23 @@ export default function InquiryForm({ onSubmitted }: InquiryFormProps) {
                 onEndDateChange={setEndDate}
               />
               <FloatingInput
-                label="What is your desired Location (State, Country)?"
+                label="What Is Your Desired Location (State, Country)?"
                 required
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
               />
               <FloatingInput
-                label="What is your Budget Range?"
+                label="What Is Your Budget Range?"
                 required
                 value={budget}
                 onChange={(e) => setBudget(e.target.value)}
               />
               <FloatingTextarea
-                label="Share some details with us about your wedding/event/project or add any additional comments you might find helpful"
+                label="Share a few details about your event, or add anything else you'd like us to know."
                 required
                 value={details}
                 onChange={(e) => setDetails(e.target.value)}
-                placeholder="e.g. my event date is approaching quickly, and I'm beginning to feel the pressure. I'm looking for a team who can step in and guide the entire process."
+                placeholder="e.g. We're expecting around 120 guests and are looking for full planning, design, and coordination from start to finish. Or we already have our venue and vendors booked but need support with day-of coordination."
               />
             </div>
 

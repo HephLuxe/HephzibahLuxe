@@ -2,43 +2,43 @@ import ComparisonSlider from "@/components/ui/ComparisonSlider";
 
 const transformations = [
   {
-    location: "LAGOS, NIGERIA — 2023",
-    subtitle: "A Contemporary Outdoor Wedding",
-    title: "ROMANCE\nREIMAGINED",
+    location: "LAGOS, NIGERIA — 2022",
+    subtitle: "A Celebration Across Generations",
+    title: "LEGACY\nHONOURED",
     description:
-      "What began as a simple open lawn became a contemporary landscape of sculptural florals, soft draping, and clean architectural lines. We carved out an aisle that framed the water's edge, layered muted tones against the natural greenery, and introduced intentional elevation points that created depth and flow. The transformation turned an ordinary outdoor clearing into a refined, modern ceremony space — light-filled, airy, and romantic.",
-    beforeImg: "/images/beforeafterpage/firstbefore.jpg",
-    afterImg: "/images/beforeafterpage/firstafter.jpg",
-    sliderOnRight: true,
-  },
-  {
-    location: "ABUJA, NIGERIA — 2023",
-    subtitle: "Corporate Hospitality, Elevated",
-    title: "GOV. HALL\nREIMAGINED",
-    description:
-      "What began as a stark conference hall was transformed into a warm, contemporary dining environment. Clean lines and subtle brand cues shaped the design, while immersive lighting softened the room's edges and invited guests into a more intimate experience. Sterile layouts gave way to elegantly dressed tables, curated florals, and a gentle glow that echoed BlueTech's identity. The result was a space where corporate formality dissolved into refined hospitality — polished and thoughtfully composed.",
-    beforeImg: "/images/beforeafterpage/secondbefore.jpg",
-    afterImg: "/images/beforeafterpage/secondafter.jpg",
-    sliderOnRight: false,
-  },
-  {
-    location: "LAGOS, NIGERIA — 2024",
-    subtitle: "A Cultural & Modern Fusion Wedding",
-    title: "TRADITION\nILLUMINATED",
-    description:
-      "A plain events hall became the stage for a modern interpretation of cultural heritage. Vibrant traditional textiles were paired with minimalist florals, while soft lighting highlighted ceremonial areas with intention. The result was a warm, contemporary scene where colour and structure danced together — a fusion of culture and modernity brought to life in rich detail.",
-    beforeImg: "/images/beforeafterpage/beforebg.jpg",
-    afterImg: "/images/beforeafterpage/afterbg.jpg",
+      "What began as a familiar family compound was transformed into a regal setting worthy of eighty-five remarkable years. Rich shades of royal purple, complemented by warm touches of gold, elegant florals, and carefully layered details brought warmth and grandeur to the outdoor space, creating a welcoming atmosphere for family and friends gathered from near and far. The transformation honoured a life well lived with a celebration that felt vibrant, dignified, and beautifully composed.",
+    beforeImg: "/images/beforeafterpage/beforeone.jpg",
+    afterImg: "/images/beforeafterpage/afterone.jpg",
     sliderOnRight: true,
   },
   {
     location: "LAGOS, NIGERIA — 2022",
-    subtitle: "A Birthday Dinner in Modern Bloom",
-    title: "INTIMATE\nGIRLS DINNER",
+    subtitle: "An Evening Inspired by Purpose",
+    title: "IMPACT\nELEVATED",
     description:
-      "What began as a simple private dining room blossomed into a softly lit, modern sanctuary. Clean tablescapes, layered with delicate florals and gentle candlelight, wrapped the room in a warm, luminous glow. Tonal accents added depth, turning the space into a cocoon of quiet elegance. The transformation shifted the atmosphere from ordinary to intimate — a tender, luxurious setting crafted for connection, warmth, and a beauty that felt both effortless and intentional.",
-    beforeImg: "/images/beforeafterpage/fourthbefore.jpg",
-    afterImg: "/images/beforeafterpage/fourthafter.jpg",
+      "What began as a simple event space was thoughtfully transformed into an elegant setting for an evening of giving and impact. Through intentional design, layered lighting, refined tablescapes, and carefully considered details, the atmosphere encouraged meaningful conversation, genuine connection, and generosity. Every element was designed to support the purpose of the evening—creating a warm, welcoming environment that inspired guests to gather, engage, and give.",
+    beforeImg: "/images/beforeafterpage/beforetwo.jpg",
+    afterImg: "/images/beforeafterpage/aftertwo.jpg",
+    sliderOnRight: false,
+  },
+  {
+    location: "LAGOS, NIGERIA — 2021",
+    subtitle: "A Milestone Celebration in Elegance",
+    title: "GRACE\nCELEBRATED",
+    description:
+      "Rather than seeking a grand venue, we reimagined the place that meant the most—home. Set within the family compound, the celebration embraced familiar surroundings and transformed them through warm gold tones, regal purple accents, and a visual story centred on the celebrant herself. Layered portraits, thoughtful styling, and carefully composed details created an atmosphere that felt both intimate and magnificent, proving that meaningful design is never defined by location.",
+    beforeImg: "/images/beforeafterpage/beforethree.jpg",
+    afterImg: "/images/beforeafterpage/afterthree.jpg",
+    sliderOnRight: true,
+  },
+  {
+    location: "LAGOS, NIGERIA — 2026",
+    subtitle: "A Forum for Meaningful Change",
+    title: "CONNECTION\nCULTIVATED",
+    description:
+      "What began as a conventional conference venue became an inviting setting for meaningful conversation. Clean layouts, thoughtful styling, and carefully coordinated details softened the space while maintaining a polished corporate aesthetic. Completed from concept to execution in just five days, the transformation created an environment that felt warm, professional, and purposefully designed for connection.",
+    beforeImg: "/images/beforeafterpage/beforefour.jpg",
+    afterImg: "/images/beforeafterpage/afterfour.jpg",
     sliderOnRight: false,
   },
 ];

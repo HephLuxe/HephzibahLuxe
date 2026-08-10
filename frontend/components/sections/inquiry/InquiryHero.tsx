@@ -2,7 +2,7 @@ import Image from "next/image";
 
 export default function InquiryHero() {
     return (
-        <section className="relative w-full overflow-hidden h-[35vh] landscape:h-[95vh] sm:h-[35vh] md:h-[40vh] lg:h-[70vh] xl:h-[75vh] 2xl:h-[80vh]">
+        <section className="relative w-full overflow-hidden h-[35vh] landscape:h-[75vh] sm:h-[35vh] md:h-[40vh] lg:h-[60vh] xl:h-[65vh] 2xl:h-[70vh]">
             {/* Background */}
             <div
                 className="absolute inset-0 bg-cover bg-center bg-no-repeat"

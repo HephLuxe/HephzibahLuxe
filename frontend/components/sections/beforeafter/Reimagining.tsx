@@ -7,7 +7,7 @@ export default function Reimagining() {
         </h2>
 
         <p className="mt-10 sm:mt-11 md:mt-12 lg:mt-12 xl:mt-14 2xl:mt-16 font-body font-light tracking-[-0.01em] text-primary text-[15px] leading-[26px] sm:text-[16px] sm:leading-[28px] md:text-[18px] md:leading-[30px] lg:text-[20px] lg:leading-[34px] xl:text-[22px] xl:leading-[36px] 2xl:text-[24px] 2xl:leading-[38px] max-w-[920px] xl:max-w-[1080px] 2xl:max-w-[1240px]">
-          We see possibility in every space — even the ones that appear ordinary at first glance. From plain halls reimagined into softly lit atmospheres, to open fields transformed into tented celebrations along the water, to simple dining rooms elevated with texture and light, we curate environments that feel intentional, personal, and beautifully immersive. While we love venues that are stunning on their own, our joy lies in crafting designs that reflect the heart of your celebration. Use the slider below to explore each transformation.
+          We see possibility in every space—even those that appear ordinary at first glance. Through thoughtful design, creative direction, and careful attention to detail, we transform everyday settings into celebrations that feel intentional, immersive, and beautifully personal. Whether enhancing an existing venue or starting with a blank canvas, every transformation is guided by your story and brought to life with care. Explore each transformation using the slider below.
         </p>
       </div>
     </section>

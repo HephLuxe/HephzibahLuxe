@@ -31,7 +31,7 @@ export default function Intention() {
                             className="group inline-flex items-center gap-2 lg:gap-3 border border-background px-4 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 lg:px-8 lg:py-3 xl:px-9 xl:py-3.5 2xl:px-10 2xl:py-4 transition-all duration-300 hover:bg-background"
                         >
                             <span className="font-body font-light italic text-background group-hover:text-primary transition-colors whitespace-nowrap text-[13px] leading-[24px] sm:text-[14px] sm:leading-[26px] md:text-[16px] md:leading-[28px] lg:text-[20px] lg:leading-[35px] xl:text-[22px] 2xl:text-[24px]">
-                                View our Portfolio
+                                View Our Portfolio
                             </span>
                             <span className="relative inline-block w-[16px] h-[12px] sm:w-[17px] sm:h-[13px] md:w-[18px] md:h-[14px] lg:w-[20px] lg:h-[14px] xl:w-[22px] xl:h-[16px] 2xl:w-[24px] 2xl:h-[18px]">
                                 <Image
@@ -54,7 +54,7 @@ export default function Intention() {
                             className="group inline-flex items-center gap-2 lg:gap-3 border border-background px-4 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 lg:px-8 lg:py-3 xl:px-9 xl:py-3.5 2xl:px-10 2xl:py-4 transition-all duration-300 hover:bg-background"
                         >
                             <span className="font-body font-light italic text-background group-hover:text-primary transition-colors whitespace-nowrap text-[13px] leading-[24px] sm:text-[14px] sm:leading-[26px] md:text-[16px] md:leading-[28px] lg:text-[20px] lg:leading-[35px] xl:text-[22px] 2xl:text-[24px]">
-                                Share your vision
+                                Share Your vision
                             </span>
                             <span className="relative inline-block w-[16px] h-[12px] sm:w-[17px] sm:h-[13px] md:w-[18px] md:h-[14px] lg:w-[20px] lg:h-[14px] xl:w-[22px] xl:h-[16px] 2xl:w-[24px] 2xl:h-[18px]">
                                 <Image

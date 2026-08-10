@@ -8,7 +8,7 @@ const introImages = [
   "/images/portfoliopage/portfoliotwo.jpg",
   "/images/intro/introtwo.jpg",
   "/images/intro/introfour.jpg",
-  "/images/intro/introfive.jpg",
+  "/images/intro/introfives.jpg",
 ];
 
 export default function Intro() {
@@ -59,7 +59,7 @@ export default function Intro() {
               className="group mt-10 sm:mt-12 lg:mt-12 inline-flex items-center justify-center gap-3 self-start border border-primary px-6 py-3 lg:px-7 lg:py-3.5 xl:px-8 xl:py-4 transition-colors hover:bg-primary hover:text-background"
             >
               <span className="font-body font-light italic tracking-[0.01em] text-[18px] sm:text-[19px] md:text-[20px] lg:text-[20px] xl:text-[22px] 2xl:text-[24px] leading-[35px]">
-                About the Brand
+                About The Brand
               </span>
               <Image
                 src="/icons/buttonarrow.svg"

@@ -38,12 +38,11 @@ export default function ClientPortalLogIn() {
                 </h1>
 
                 <p className="mt-8 sm:mt-9 md:mt-10 font-body font-light text-primary text-[15px] leading-[24px] sm:text-[16px] sm:leading-[26px] md:text-[18px] md:leading-[28px] lg:text-[16px] lg:leading-[25px] xl:text-[18px] xl:leading-[28px] 2xl:text-[20px] 2xl:leading-[30px]">
-                    Welcome to your Hephzibah Luxe Client Portal. This curated space gives you effortless access to your planning documents, timelines, proposals, and shared updates — ensuring a beautifully coordinated journey from start to finish.
+                    Welcome to your Hephzibah Luxe Client Portal. This thoughtfully curated space gives you seamless access to your planning documents, timelines, proposals, contracts, and shared updates—keeping every stage of your planning journey organised, connected, and beautifully coordinated.
                 </p>
 
                 <p className="mt-4 font-body font-normal italic text-primary text-[15px] leading-[24px] sm:text-[16px] sm:leading-[26px] md:text-[18px] md:leading-[28px] lg:text-[16px] lg:leading-[25px] xl:text-[18px] xl:leading-[28px] 2xl:text-[20px] 2xl:leading-[30px]">
-                    <span className="font-medium not-italic">Please note:</span>{" "}
-                    <span className="italic">New accounts cannot be created on this page. After your booking is confirmed, our team will create your portal account and email you instructions to set your password.</span>
+                    <span className="italic">Note: Portal accounts cannot be created through this page. Once your booking has been confirmed, our team will create your account and send you an email with instructions to set your password.</span>
                 </p>
 
                 {showError && (
@@ -97,8 +96,8 @@ export default function ClientPortalLogIn() {
                         type="submit"
                         disabled={!canSubmit}
                         className={`group inline-flex items-center gap-6 px-10 py-4 md:px-11 md:py-[18px] xl:px-12 xl:py-5 transition-colors ${canSubmit
-                                ? "bg-secondary border border-secondary hover:bg-background hover:border-primary"
-                                : "bg-[#A8A8A8] border border-[#A8A8A8] cursor-not-allowed"
+                            ? "bg-secondary border border-secondary hover:bg-background hover:border-primary"
+                            : "bg-[#A8A8A8] border border-[#A8A8A8] cursor-not-allowed"
                             }`}
                     >
                         <span

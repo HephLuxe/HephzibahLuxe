@@ -40,12 +40,12 @@ export default function InquiryPageClient() {
           </h2>
 
           <p className="mt-8 sm:mt-9 md:mt-10 font-sans font-light text-primary text-center text-[16px] leading-[25px] sm:text-[17px] sm:leading-[27px] md:text-[18px] md:leading-[28px] lg:text-[18px] lg:leading-[29px] xl:text-[20px] xl:leading-[32px] 2xl:text-[22px] 2xl:leading-[34px] max-w-[640px] xl:max-w-[760px] 2xl:max-w-[860px] mx-auto">
-            Thank you for considering Hephzibah Luxe. Our team is reviewing your details and will reach out within{" "}
-            <span className="font-bold">2 business days</span> to continue the conversation. We look forward to learning more about your event and exploring how we can support your vision.
+            Thank you for reaching out to Hephzibah Luxe. We've received your inquiry, and our team is thoughtfully reviewing the details. We'll be in touch within{" "}
+            <span className="font-bold">2-3 business days</span> to continue the conversation. We look forward to learning more about your event and exploring how we can bring your vision to life.
           </p>
 
           <p className="mt-6 sm:mt-7 font-sans font-light text-primary text-center text-[16px] leading-[25px] sm:text-[17px] sm:leading-[27px] md:text-[18px] md:leading-[28px] lg:text-[18px] lg:leading-[29px] xl:text-[20px] xl:leading-[32px] 2xl:text-[22px] 2xl:leading-[34px]">
-            A confirmation email has been sent to your email - {submittedEmail}.
+            A confirmation email has been sent to - {submittedEmail}.
           </p>
 
           <div className="mt-10 sm:mt-11 md:mt-12 xl:mt-14 flex justify-center">

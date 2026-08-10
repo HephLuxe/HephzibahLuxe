@@ -11,7 +11,7 @@ const testimonials = [
         subheader: "Lagos State Government (OPL & CE) MSME Engagement Forum",
         quote:
             "“Working with Hephzibah Luxe was a wonderful experience. Despite the short notice and tight budget, the team ensured the event was well organised and executed seamlessly from start to finish. Their coordination and attention to detail created a welcoming and professional atmosphere for our guests. We truly appreciated their dedication, professionalism, and calm approach throughout the entire process. ”",
-        cta: "View their Forum",
+        cta: "View Their Forum",
         href: "/portfolio/msme-forum",
     },
     {
@@ -20,7 +20,7 @@ const testimonials = [
         subheader: "A Golden 50th: An Intimate Two-Day Celebration of Family, Faith & Joy",
         quote:
             "“I wanted something simple but meaningful—and that’s exactly what this was. Every detail felt intentional, and the photos captured me in such a beautiful, authentic way. There was a quiet attention to detail that made me feel completely at ease, and it truly showed in the final images. What I loved most was that the focus never shifted away from me. It felt like the perfect way to step into fifty. ”",
-        cta: "View her Birthday",
+        cta: "View Her Birthday",
         href: "/portfolio/golden-50th",
     },
     {
