@@ -36,7 +36,7 @@ export default function Navbar() {
                 {/* Logo + Wordmark */}
                 <Link href="/" className="flex items-center" onClick={() => setIsOpen(false)}>
                     <Image
-                        src="/brand/logo.svg"
+                        src="/brand/logos.svg"
                         alt="Hephzibah Luxe"
                         width={80}
                         height={80}
@@ -114,7 +114,7 @@ export default function Navbar() {
                 <div className="flex flex-col h-full px-6 sm:px-8 md:px-10 py-6 sm:py-7 md:py-8">
                     <div className="flex items-start justify-between">
                         <Image
-                            src="/brand/logo.svg"
+                            src="/brand/logos.svg"
                             alt="Hephzibah Luxe"
                             width={240}
                             height={240}

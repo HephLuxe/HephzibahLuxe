@@ -50,7 +50,7 @@ export default function Hero() {
                 </div>
             </div>
 
-            <div className="absolute inset-0 bg-primary/30" />
+            <div className="absolute inset-0 bg-primary/45" />
 
             <div className="relative z-10 flex h-full flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-20 sm:pt-16 md:pt-20 lg:pt-32 xl:pt-40 text-background">
                 <h1 className="font-display font-thin text-center tracking-[-0.02em] text-[28px] leading-[1.2] sm:text-[40px] sm:leading-[1.15] md:text-[54px] md:leading-[1.15] lg:text-[74px] lg:leading-[1.1] xl:text-[96px] xl:leading-[1.1] 2xl:text-[116px] 2xl:leading-[1.1]">
@@ -61,7 +61,7 @@ export default function Hero() {
                         CELEBRATIONS
                     </span>
                 </h1>
-                <p className="font-body font-normal text-center uppercase tracking-[-0.01em] text-[11px] leading-[19px] sm:text-[12px] sm:leading-[20px] md:text-[13px] md:leading-[22px] lg:text-[16px] lg:leading-[28px] xl:text-[18px] xl:leading-[32px] mt-4 sm:mt-6 lg:mt-10 max-w-[640px] xl:max-w-[740px]">
+                <p className="font-body font-normal text-center uppercase tracking-[-0.01em] text-[12.5px] leading-[19px] sm:text-[13px] sm:leading-[20px] md:text-[14px] md:leading-[22px] lg:text-[16px] lg:leading-[28px] xl:text-[18px] xl:leading-[32px] mt-4 sm:mt-6 lg:mt-10 max-w-[640px] xl:max-w-[740px]">
                     A design-led wedding and event planning studio shaping celebrations with intention and grace.
                 </p>
             </div>

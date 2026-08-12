@@ -30,7 +30,7 @@ export default function Intro() {
             {/* Logo — scales across breakpoints */}
             <div className="mb-4 sm:mb-5 md:mb-6 lg:mb-6">
               <Image
-                src="/brand/bluelogo.svg"
+                src="/brand/bluelogos.svg"
                 alt=""
                 width={220}
                 height={220}

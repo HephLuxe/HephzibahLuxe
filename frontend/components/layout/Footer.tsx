@@ -43,7 +43,7 @@ export default function Footer() {
                 <div className="flex flex-row items-start justify-between gap-6 sm:gap-8 md:gap-10 lg:gap-10 xl:gap-14 2xl:gap-20">
                     <div className="flex-shrink-0">
                         <Image
-                            src="/brand/logo.svg"
+                            src="/brand/logos.svg"
                             alt="Hephzibah Luxe"
                             width={320}
                             height={320}

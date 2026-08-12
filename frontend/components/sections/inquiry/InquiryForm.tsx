@@ -116,7 +116,7 @@ export default function InquiryForm({ onSubmitted }: InquiryFormProps) {
           </h2>
 
           <p className="mt-8 sm:mt-9 md:mt-10 font-body font-light text-primary text-[16px] leading-[24px] sm:text-[16px] sm:leading-[26px] md:text-[18px] md:leading-[28px] lg:text-[16px] lg:leading-[25px] xl:text-[18px] xl:leading-[28px] 2xl:text-[20px] 2xl:leading-[30px] max-w-[1100px] xl:max-w-[1200px] 2xl:max-w-[1320px]">
-            We value every inquiry and would be delighted to learn more about your celebration. From weddings and milestone birthdays to elevated corporate gatherings, we create experiences that are intentional, refined, and unforgettable. Simply share your details below, and our team will be in touch within 1–2 business days.
+            We value every inquiry and would be delighted to learn more about your celebration. From weddings and milestone birthdays to elevated corporate gatherings, we create experiences that are intentional, refined, and unforgettable. Simply share your details below, and our team will be in touch within 2-3 business days.
           </p>
 
           <p className="mt-4 font-body font-light text-primary text-[16px] leading-[24px] sm:text-[16px] sm:leading-[26px] md:text-[18px] md:leading-[28px] lg:text-[16px] lg:leading-[25px] xl:text-[18px] xl:leading-[28px] 2xl:text-[20px] 2xl:leading-[30px]">
