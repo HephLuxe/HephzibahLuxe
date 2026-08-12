@@ -369,7 +369,7 @@ export const portfolioEvents: PortfolioEvent[] = [
     {
       type: "testimonial",
       quote:
-        "Working with Hephzibah Luxe was a delightful experience. Despite the short notice and tight budget, the team ensured the event was well organised and ran smoothly from start to finish. Their coordination and attention to detail helped create a welcoming and professional atmosphere for our guests. We truly appreciated their commitment and calm execution throughout the process. ",
+        "Working with Hephzibah Luxe was a wonderful experience. Despite the short timeline and limited budget, the team ensured the event was well organised and executed seamlessly from start to finish. Their coordination and attention to detail created a welcoming and professional atmosphere for our guests, and we truly appreciated their calm, thoughtful approach throughout the process.",
       attribution: "Mrs. Abimbola, OPL&CE Manager",
     },
     {

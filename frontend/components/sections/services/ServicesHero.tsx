@@ -5,7 +5,7 @@ export default function ServicesHero() {
     <section className="relative w-full h-[40vh] landscape:h-[95vh] sm:h-[50vh] md:h-[50vh] lg:h-[100vh] xl:h-[100vh] overflow-hidden">
       {/* Mobile/landscape/iPad background */}
       <Image
-        src="/images/servicespage/mobileservicesheros.jpg"
+        src="/images/servicespage/mobileserviceshero.jpg"
         alt="Explore our services"
         fill
         priority
@@ -15,7 +15,7 @@ export default function ServicesHero() {
 
       {/* Laptop+ background */}
       <Image
-        src="/images/servicespage/servicesheros.jpg"
+        src="/images/servicespage/servicesheroo.jpg"
         alt="Explore our services"
         fill
         priority

@@ -37,7 +37,7 @@ function MobileHeadings({ color }: { color: "primary" | "background" }) {
   return (
     <>
       <h1
-        className={`font-display font-thin ${cls} text-[40px] leading-[46px] sm:text-[68px] sm:leading-[74px] md:text-[88px] md:leading-[96px] tracking-[-0.005em] whitespace-nowrap`}
+        className={`font-display font-thin ${cls} text-[48px] leading-[46px] sm:text-[68px] sm:leading-[74px] md:text-[88px] md:leading-[96px] tracking-[-0.005em] whitespace-nowrap`}
       >
         ABOUT <span className="italic">the</span> BRAND
       </h1>

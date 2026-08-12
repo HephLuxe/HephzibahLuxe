@@ -7,11 +7,11 @@ export default function BeforeAfterHero() {
             <div className="absolute inset-0 flex">
                 <div
                     className="w-1/2 bg-cover bg-center"
-                    style={{ backgroundImage: "url(/images/beforeafterpage/beforebg.jpg)" }}
+                    style={{ backgroundImage: "url(/images/beforeafterpage/beforebgg.jpg)" }}
                 />
                 <div
                     className="w-1/2 bg-cover bg-center"
-                    style={{ backgroundImage: "url(/images/beforeafterpage/afterbg.jpg)" }}
+                    style={{ backgroundImage: "url(/images/beforeafterpage/afterbgg.jpg)" }}
                 />
             </div>
 

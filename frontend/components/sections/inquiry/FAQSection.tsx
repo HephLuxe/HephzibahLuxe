@@ -13,87 +13,93 @@ const FAQS: FAQ[] = [
     answer: (
       <>
         <p>
-          At Hephzibah Luxe, we plan every kind of celebration. From weddings and milestone birthdays to intimate dinners, naming ceremonies, private soirées, luxury picnics, corporate gatherings, and everything in between — if it deserves beauty, intention, and seamless execution, we curate it.
+          At Hephzibah Luxe, we plan a wide range of celebrations and events. From weddings and milestone birthdays to intimate dinners, naming ceremonies, private soirées, luxury picnics, and corporate gatherings, each experience is approached with the same level of care, intention, and refined execution.
         </p>
         <p>
-          No event is too small, too grand, or too unique. Whatever you&apos;re envisioning, we elevate it with elegance, structure, and thoughtful detail.
+          Whether your event is intimate or large in scale, our approach remains the same — creating thoughtful, beautifully considered experiences that reflect your vision with elegance and ease.
         </p>
       </>
     ),
   },
   {
-    question: "What planning options do you offer, and how do I choose the one that fits my event best?",
+    question: "What Planning Options Do You Offer, and How Do I Choose the One That Fits My Event Best?",
     answer: (
       <>
         <p>
-          We offer three core levels of service across all event types — full planning, partial planning, and coordination. Each provides a different level of support depending on where you are in your planning journey and how involved you&apos;d like us to be.
+          We offer three core levels of service across all event types — <strong className="font-normal">Full Planning, Partial Planning, and Coordination</strong>. Each provides a different level of support depending on where you are in your planning journey and how involved you&apos;d like us to be.
         </p>
         <p>
-          If you&apos;re unsure which option fits your needs, we&apos;ll guide you. During your discovery conversation, we&apos;ll learn about your event&apos;s complexity, your timeline, and how much support you feel you need — and then recommend the package that serves you best.
+          If you&apos;re unsure which option is right for you, we&apos;ll guide you. During your discovery conversation, we&apos;ll learn more about your event, timeline, and planning needs before recommending the level of support best suited to your celebration.
         </p>
         <p>
-          Because every celebration is unique, we also create custom-tailored packages for clients who require specific support. Whether you want complete end-to-end planning, selective guidance, or seamless event-day management, we ensure your experience is beautifully aligned with your vision.
+          Because every event is unique, we also offer bespoke packages tailored to clients with specific requirements. Whether you&apos;re looking for comprehensive planning, selective guidance, or seamless event-day coordination, we&apos;ll create an experience that feels thoughtfully aligned with your vision.
         </p>
       </>
     ),
   },
   {
-    question: "Do you manage the event design process, including décor, styling, and visual direction?",
+    question: "Do You Manage the Event Design Process, Including Décor, Styling, and Creative Direction?",
     answer: (
       <>
         <p>
-          Yes — event design is an essential part of what we do. At Hephzibah Luxe, we guide the full creative direction of your event through visual boards, mood development, colour story, style curation, and overall aesthetic harmony. We shape the vision so that every detail feels intentional and beautifully aligned.
+          Yes — event design is an integral part of what we do. At Hephzibah Luxe, we lead the creative direction of your event through visual mood boards, colour palettes, style curation, and a cohesive design vision. Every decision is thoughtfully guided to ensure your celebration feels intentional, refined, and beautifully aligned.
         </p>
         <p>
-          However, we believe luxury experiences require specialists. For production, décor, florals, rentals, and technical styling, we collaborate exclusively with expert vendors who specialize in those areas. This ensures flawless execution, premium quality, and a seamless transformation of the concept we create together.
+          We believe exceptional events are brought to life by specialists. For décor, florals, rentals, stationery, lighting, and production, we collaborate with a trusted network of expert vendors, each selected for their craftsmanship and attention to detail. This allows us to deliver exceptional quality while ensuring every element is executed seamlessly.
         </p>
         <p>
-          We stay fully involved throughout the process — overseeing design consistency, managing vendor communication, and ensuring everything reflects the vision we&apos;ve curated. You receive the benefit of a unified aesthetic without the stress of coordinating multiple creatives yourself.
+          Throughout the process, we remain closely involved — overseeing design consistency, managing vendor collaboration, and ensuring every detail reflects the vision we&apos;ve created together. The result is a cohesive, beautifully executed celebration without the complexity of coordinating multiple creative partners yourself.
         </p>
       </>
     ),
   },
   {
-    question: "How far in advance should we reach out to begin the planning process with Hephzibah Luxe?",
+    question: "How Far in Advance Should We Reach Out to Begin the Planning Process?",
     answer: (
       <>
         <p>
-          We welcome inquiries at any stage of your planning journey — whether you&apos;re far ahead, just beginning, or feeling pressed for time. However, for the most seamless experience, we encourage clients to reach out as early as possible. This allows us to secure premium vendors, build your vision intentionally, and craft a beautifully curated timeline without unnecessary pressure.
+          We welcome inquiries at any stage of your planning journey — whether you&apos;re planning well in advance, just getting started, or working within a shorter timeline. For the most seamless experience, however, we encourage clients to reach out as early as possible. This gives us the time to secure trusted vendors, thoughtfully develop your vision, and create a well-paced planning experience from beginning to end.
         </p>
-        <p>Our recommendation:</p>
+        <p className="font-normal">Our Recommendations:</p>
         <ul className="list-disc pl-6 space-y-1">
-          <li>For weddings, 4-6 months is ideal.</li>
-          <li>For social + private events, 2-3 months works beautifully.</li>
-          <li>For corporate events, timelines vary — but earlier is always better.</li>
+          <li>
+            <strong className="font-normal">Weddings:</strong> 4–6 months in advance
+          </li>
+          <li>
+            <strong className="font-normal">Social &amp; Private Events:</strong> 2–3 months in advance
+          </li>
+          <li>
+            <strong className="font-normal">Corporate Events:</strong> Timelines vary, but earlier is always recommended
+          </li>
         </ul>
         <p>
-          Regardless of when you inquire, our role is the same: to bring structure, elegance, and ease to your event from the moment you connect with us.
+          Regardless of when you reach out, our role remains the same — to bring clarity, intention, and ease to every stage of your planning journey.
         </p>
       </>
     ),
   },
   {
-    question: "How does budgeting work with Hephzibah Luxe, and do you accept events with varying investment levels?",
+    question: "How Does Budgeting Work with Hephzibah Luxe, and Do You Accept Events with Varying Investment Levels?",
     answer: (
       <>
         <p>
-          Yes — we thoughtfully guide clients across a range of budgets. Every event, whether large or intimate, deserves beauty, intention, and excellent planning. We don&apos;t exclude clients with smaller budgets; instead, we help you make the most of your investment while maintaining the elegance Hephzibah Luxe is known for.
+          Yes — we thoughtfully guide clients across a wide range of investment levels. Every event, whether intimate or grand, deserves intentional planning, refined design, and exceptional attention to detail. Our approach is to help you make the most of your investment, creating an experience that feels elevated while remaining aligned with your priorities.
         </p>
         <p>
-          Our focus is always on clarity, honest guidance, and designing with purpose — ensuring the experience feels elevated at any scale. During your discovery process, we&apos;ll walk you through what&apos;s realistic, recommend the most suitable level of support, and tailor the experience to align with your priorities.
+          Throughout the planning process, we provide honest guidance, clear recommendations, and thoughtful solutions that maximise both beauty and value. During your discovery conversation, we&apos;ll explore what&apos;s most important to you, recommend the most appropriate level of support, and tailor our services to suit your vision and investment.
         </p>
       </>
     ),
   },
   {
-    question: "What does day-of presence and support look like for Hephzibah Luxe?",
+    question: "What Does Day-of Presence and Support Look Like?",
     answer: (
       <>
         <p>
-          We&apos;re with you from the very beginning to the very end of your event. Whether it&apos;s a wedding, birthday, naming ceremony, dinner, or corporate gathering, our lead planner stays onsite for the entire duration to ensure a seamless flow from setup to final wrap-up.
+          From the first arrival to the final farewell, we&apos;re by your side. Whether it&apos;s a wedding, milestone birthday, naming ceremony, private dinner, or corporate gathering, your lead planner remains onsite throughout the celebration, overseeing every detail to ensure everything unfolds seamlessly from setup through to the final wrap-up.
         </p>
         <p>
-          There are no cut-off hours for our lead planner — you&apos;re never charged extra if things run longer than expected. Your day deserves uninterrupted support.
+          Unlike many planners, we don&apos;t work to fixed cut-off hours. Your lead planner remains present for as long as your celebration requires, providing uninterrupted support so you can be fully present and enjoy every moment with complete peace of mind.
         </p>
       </>
     ),

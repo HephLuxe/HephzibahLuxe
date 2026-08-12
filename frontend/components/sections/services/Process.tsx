@@ -156,7 +156,7 @@ export default function Process() {
                                     </h3>
 
                                     {/* Lead */}
-                                    <p className="font-body font-light italic text-primary leading-[100%] mb-4 text-[18px] sm:text-[19px] md:text-[20px] lg:text-[20px] xl:text-[22px] 2xl:text-[24px]">
+                                    <p className="font-body font-light italic text-primary leading-[120%] mb-4 text-[18px] sm:text-[19px] md:text-[20px] lg:text-[20px] xl:text-[22px] 2xl:text-[24px]">
                                         {step.lead}
                                     </p>
 

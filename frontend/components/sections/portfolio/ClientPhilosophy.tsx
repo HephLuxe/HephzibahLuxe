@@ -5,7 +5,7 @@ import Link from "next/link";
 
 export default function ClientPhilosophy() {
     return (
-        <section className="relative bg-secondary text-background py-16 sm:py-20 md:py-24 lg:py-32 xl:py-36 2xl:py-40 overflow-hidden">
+        <section className="relative bg-secondary text-background py-16 sm:py-20 md:py-22 lg:py-24 xl:py-26 2xl:py-40 overflow-hidden">
             {/* Top-left edge image */}
             <div className="absolute -left-30 top-10 w-[160px] h-[180px] sm:-left-28 sm:top-12 sm:w-[180px] sm:h-[220px] md:-left-12 md:top-16 md:w-[220px] md:h-[280px] lg:left-0 lg:top-16 lg:w-[130px] lg:h-[320px] xl:w-[180px] xl:h-[420px] 2xl:w-[220px] 2xl:h-[500px]">
                 <Image
@@ -33,24 +33,24 @@ export default function ClientPhilosophy() {
             <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-8 md:px-12 lg:pl-[180px] lg:pr-[60px] xl:pl-[110px] xl:pr-[130px] 2xl:pl-[70px] 2xl:pr-[70px]">
                 <div className="pl-10 pr-4 sm:pl-16 sm:pr-16 md:pl-24 md:pr-10 lg:pl-0 lg:pr-0">
                     {/* Heading */}
-                    <h2 className="font-display font-thin text-background text-[26px] leading-[36px] sm:text-[30px] sm:leading-[42px] md:text-[36px] md:leading-[48px] lg:text-[46px] lg:leading-[58px] xl:text-[54px] xl:leading-[68px] 2xl:text-[62px] 2xl:leading-[76px] mb-8 sm:mb-10 lg:mb-12 xl:mb-14 2xl:mb-16">
+                    <h2 className="font-display font-thin text-background text-[26px] leading-[36px] sm:text-[30px] sm:leading-[42px] md:text-[36px] md:leading-[48px] lg:text-[46px] lg:leading-[58px] xl:text-[54px] xl:leading-[68px] 2xl:text-[62px] 2xl:leading-[76px] mb-6 sm:mb-8 lg:mb-8 xl:mb-8 2xl:mb-10">
                         No two events are the same — each unfolds into something beautifully personal
                     </h2>
 
                     {/* Body */}
-                    <p className="font-body font-light text-background text-[16px] leading-[28px] sm:text-[18px] sm:leading-[30px] md:text-[19px] md:leading-[32px] lg:text-[20px] lg:leading-[34px] xl:text-[22px] xl:leading-[36px] 2xl:text-[24px] 2xl:leading-[40px] mb-6 sm:mb-8 lg:mb-10 xl:mb-12">
-                        Our clients are gracious, discerning, and deeply appreciative of thoughtful design — creating the perfect canvas for us to produce our most inspired work. Their trust allows us to dream boldly and craft celebrations that feel both personal and unforgettable.
+                    <p className="font-body font-light text-background text-[16px] leading-[28px] sm:text-[18px] sm:leading-[30px] md:text-[19px] md:leading-[32px] lg:text-[20px] lg:leading-[34px] xl:text-[22px] xl:leading-[36px] 2xl:text-[24px] 2xl:leading-[40px] mb-6 sm:mb-8 lg:mb-8 xl:mb-10 2xl:mb-12">
+                        Our clients are gracious, discerning, and appreciative of thoughtful design, creating the perfect canvas for us to do our inspired work. Their trust allows us to dream boldly and craft celebrations that feel personal, beautifully refined, and unforgettable.
                     </p>
 
                     {/* Attribution */}
-                    <p className="font-sans font-light tracking-[0.2em] text-background text-[13px] leading-[24px] sm:text-[14px] sm:leading-[26px] md:text-[16px] md:leading-[28px] lg:text-[18px] lg:leading-[32px] xl:text-[20px] 2xl:text-[22px] mb-10 sm:mb-12 md:mb-14 lg:mb-16 xl:mb-20">
-                        — WINIFRED OJULARI, CEO HEPHZIBAH LUXE
+                    <p className="font-sans font-light tracking-[0.2em] text-background text-[13px] leading-[24px] sm:text-[14px] sm:leading-[26px] md:text-[16px] md:leading-[28px] lg:text-[18px] lg:leading-[32px] xl:text-[20px] 2xl:text-[22px] mb-8 sm:mb-10 md:mb-12 lg:mb-14 xl:mb-16">
+                        — WINIFRED OJULARI, CEO, HEPHZIBAH LUXE
                     </p>
 
                     {/* Bottom row — italic prompt on left, message link on right */}
                     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 lg:gap-10">
                         <p className="font-body font-light italic text-background text-[18px] leading-[28px] sm:text-[20px] sm:leading-[30px] md:text-[22px] md:leading-[32px] lg:text-[24px] lg:leading-[36px] xl:text-[26px] xl:leading-[38px] 2xl:text-[28px] 2xl:leading-[40px]">
-                            Ready to Begin? Let&apos;s create something amazing
+                            Ready to Begin? Let&apos;s Create Something Beautiful.
                         </p>
 
                         <Link
