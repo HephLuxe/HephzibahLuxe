@@ -125,20 +125,20 @@ export const portfolioEvents: PortfolioEvent[] = [
     {
       type: "images",
       images: [
-        "/images/portfoliopage/rootedone.jpg",
-        "/images/portfoliopage/rootedtwo.jpg",
-        "/images/portfoliopage/rootedthree.jpg",
+        "/images/portfoliopage/rootedones.jpg",
+        "/images/portfoliopage/rootedtwos.jpg",
+        "/images/portfoliopage/rootedthrees.jpg",
       ],
     },
-    { type: "images", images: ["/images/portfoliopage/rootedfour.jpg"] },
+    { type: "images", images: ["/images/portfoliopage/rootedfours.jpg"] },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/rootedfive.jpg",
-        "/images/portfoliopage/rootedsix.jpg",
+        "/images/portfoliopage/rootedfives.jpg",
+        "/images/portfoliopage/rootedsixs.jpg",
       ],
     },
-    { type: "images", images: ["/images/portfoliopage/rootedseven.jpg"] },
+    { type: "images", images: ["/images/portfoliopage/rootedsevens.jpg"] },
     {
       type: "testimonial",
       quote:
@@ -148,24 +148,24 @@ export const portfolioEvents: PortfolioEvent[] = [
     {
       type: "images",
       images: [
-        "/images/portfoliopage/rootedeight.jpg",
-        "/images/portfoliopage/rootednine.jpg",
+        "/images/portfoliopage/rootedeights.jpg",
+        "/images/portfoliopage/rootednines.jpg",
       ],
       ratios: [3, 2],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/rootedten.jpg",
-        "/images/portfoliopage/rootedeleven.jpg",
-        "/images/portfoliopage/rootedtwelve.jpg",
+        "/images/portfoliopage/rootedtens.jpg",
+        "/images/portfoliopage/rootedelevens.jpg",
+        "/images/portfoliopage/rootedtwelves.jpg",
       ],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/rootedthirteen.jpg",
-        "/images/portfoliopage/rootedfourteen.jpg",
+        "/images/portfoliopage/rootedthirteens.jpg",
+        "/images/portfoliopage/rootedfourteens.jpg",
       ],
       ratios: [3, 2],
     },
@@ -185,30 +185,30 @@ export const portfolioEvents: PortfolioEvent[] = [
     {
       type: "images",
       images: [
-        "/images/portfoliopage/pureone.jpg",
-        "/images/portfoliopage/puretwo.jpg",
+        "/images/portfoliopage/pureones.jpg",
+        "/images/portfoliopage/puretwos.jpg",
       ],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/purethree.jpg",
-        "/images/portfoliopage/purefour.jpg",
-        "/images/portfoliopage/purefive.jpg",
+        "/images/portfoliopage/purethrees.jpg",
+        "/images/portfoliopage/purefours.jpg",
+        "/images/portfoliopage/purefives.jpg",
       ],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/puresix.jpg",
-        "/images/portfoliopage/pureseven.jpg",
+        "/images/portfoliopage/puresixs.jpg",
+        "/images/portfoliopage/puresevens.jpg",
       ],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/pureeight.jpg",
-        "/images/portfoliopage/purenine.jpg",
+        "/images/portfoliopage/pureeights.jpg",
+        "/images/portfoliopage/purenines.jpg",
       ],
       ratios: [2, 3],
     },
@@ -221,28 +221,28 @@ export const portfolioEvents: PortfolioEvent[] = [
     {
       type: "images",
       images: [
-        "/images/portfoliopage/pureten.jpg",
-        "/images/portfoliopage/pureeleven.jpg",
+        "/images/portfoliopage/puretens.jpg",
+        "/images/portfoliopage/pureelevens.jpg",
       ],
     },
-    { type: "images", images: ["/images/portfoliopage/puretwelve.jpg"] },
-    { type: "images", images: ["/images/portfoliopage/purethirteen.jpg"] },
+    { type: "images", images: ["/images/portfoliopage/puretwelves.jpg"] },
+    { type: "images", images: ["/images/portfoliopage/purethirteens.jpg"] },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/purefourteen.jpg",
-        "/images/portfoliopage/purefifteen.jpg",
+        "/images/portfoliopage/purefourteens.jpg",
+        "/images/portfoliopage/purefifteens.jpg",
       ],
     },
-    { type: "images", images: ["/images/portfoliopage/puresixteen.jpg"] },
+    { type: "images", images: ["/images/portfoliopage/puresixteens.jpg"] },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/pureseventeen.jpg",
-        "/images/portfoliopage/pureeighteen.jpg",
+        "/images/portfoliopage/pureseventeens.jpg",
+        "/images/portfoliopage/pureeighteens.jpg",
       ],
     },
-    { type: "images", images: ["/images/portfoliopage/purenineteen.jpg"] },
+    { type: "images", images: ["/images/portfoliopage/purenineteens.jpg"] },
   ],
 },
     ],
