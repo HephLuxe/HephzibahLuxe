@@ -35,7 +35,7 @@ export const portfolioEvents: PortfolioEvent[] = [
     location: "Lagos, Nigeria",
     year: 2021,
     title: "A Golden 50th: An Intimate Two-Day Celebration of Family, Faith & Joy",
-    coverImage: "/images/portfoliopage/portfoliotwelve.jpg",
+    coverImage: "/images/portfoliopage/photoshootsixs.jpg",
     description: [
       "Turning fifty was not simply marked with a single event, but thoughtfully celebrated across two days that reflected a life rich in love, faith, and meaningful connection. Set within the comfort of home and the familiarity of community, the celebration unfolded gently—beginning with a heartfelt gathering of close family and friends before continuing into a joyful occasion filled with laughter, music, and shared moments.",
       "Rooted in gratitude and guided by intention, every element of the experience prioritised togetherness over grandeur. From the warmth of a thanksgiving gathering to the vibrancy of a celebratory party, the weekend felt deeply personal—a reflection of a life well lived and the people who helped shape it.",
