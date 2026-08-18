@@ -35,7 +35,7 @@ export const portfolioEvents: PortfolioEvent[] = [
     location: "Lagos, Nigeria",
     year: 2021,
     title: "A Golden 50th: An Intimate Two-Day Celebration of Family, Faith & Joy",
-    coverImage: "/images/portfoliopage/portfoliotwelve.jpg",
+    coverImage: "/images/portfoliopage/photoshootsixs.jpg",
     description: [
       "Turning fifty was not simply marked with a single event, but thoughtfully celebrated across two days that reflected a life rich in love, faith, and meaningful connection. Set within the comfort of home and the familiarity of community, the celebration unfolded gently—beginning with a heartfelt gathering of close family and friends before continuing into a joyful occasion filled with laughter, music, and shared moments.",
       "Rooted in gratitude and guided by intention, every element of the experience prioritised togetherness over grandeur. From the warmth of a thanksgiving gathering to the vibrancy of a celebratory party, the weekend felt deeply personal—a reflection of a life well lived and the people who helped shape it.",
@@ -56,25 +56,25 @@ export const portfolioEvents: PortfolioEvent[] = [
           {
             type: "images",
             images: [
-              "/images/portfoliopage/photoshootone.jpg",
-              "/images/portfoliopage/photoshoottwo.jpg",
-              "/images/portfoliopage/photoshootthree.jpg",
+              "/images/portfoliopage/photoshootones.jpg",
+              "/images/portfoliopage/photoshoottwos.jpg",
+              "/images/portfoliopage/photoshootthrees.jpg",
             ],
           },
           {
             type: "images",
-            images: ["/images/portfoliopage/photoshootfour.jpg"],
+            images: ["/images/portfoliopage/photoshootfours.jpg"],
           },
           {
             type: "images",
             images: [
-              "/images/portfoliopage/photoshootfive.jpg",
-              "/images/portfoliopage/photoshootsix.jpg",
+              "/images/portfoliopage/photoshootfives.jpg",
+              "/images/portfoliopage/photoshootsixs.jpg",
             ],
           },
           {
             type: "images",
-            images: ["/images/portfoliopage/photoshootseven.jpg"],
+            images: ["/images/portfoliopage/photoshootsevens.jpg"],
           },
           {
             type: "testimonial",
@@ -85,29 +85,29 @@ export const portfolioEvents: PortfolioEvent[] = [
           {
             type: "images",
             images: [
-              "/images/portfoliopage/photoshooteight.jpg",
-              "/images/portfoliopage/photoshootnine.jpg",
+              "/images/portfoliopage/photoshooteights.jpg",
+              "/images/portfoliopage/photoshootnines.jpg",
             ],
             ratios: [3, 2],
           },
           {
             type: "images",
             images: [
-              "/images/portfoliopage/photoshootten.jpg",
-              "/images/portfoliopage/photoshooteleven.jpg",
+              "/images/portfoliopage/photoshoottens.jpg",
+              "/images/portfoliopage/photoshootelevens.jpg",
             ],
           },
           {
             type: "images",
             images: [
-              "/images/portfoliopage/photoshoottwelve.jpg",
-              "/images/portfoliopage/photoshootthirteen.jpg",
+              "/images/portfoliopage/photoshoottwelves.jpg",
+              "/images/portfoliopage/photoshootthirteens.jpg",
             ],
             ratios: [3, 2],
           },
           {
             type: "images",
-            images: ["/images/portfoliopage/photoshootfourteen.jpg"],
+            images: ["/images/portfoliopage/photoshootfourteens.jpg"],
           },
         ],
       },
@@ -125,20 +125,20 @@ export const portfolioEvents: PortfolioEvent[] = [
     {
       type: "images",
       images: [
-        "/images/portfoliopage/rootedone.jpg",
-        "/images/portfoliopage/rootedtwo.jpg",
-        "/images/portfoliopage/rootedthree.jpg",
+        "/images/portfoliopage/rootedones.jpg",
+        "/images/portfoliopage/rootedtwos.jpg",
+        "/images/portfoliopage/rootedthrees.jpg",
       ],
     },
-    { type: "images", images: ["/images/portfoliopage/rootedfour.jpg"] },
+    { type: "images", images: ["/images/portfoliopage/rootedfours.jpg"] },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/rootedfive.jpg",
-        "/images/portfoliopage/rootedsix.jpg",
+        "/images/portfoliopage/rootedfives.jpg",
+        "/images/portfoliopage/rootedsixs.jpg",
       ],
     },
-    { type: "images", images: ["/images/portfoliopage/rootedseven.jpg"] },
+    { type: "images", images: ["/images/portfoliopage/rootedsevens.jpg"] },
     {
       type: "testimonial",
       quote:
@@ -148,24 +148,24 @@ export const portfolioEvents: PortfolioEvent[] = [
     {
       type: "images",
       images: [
-        "/images/portfoliopage/rootedeight.jpg",
-        "/images/portfoliopage/rootednine.jpg",
+        "/images/portfoliopage/rootedeights.jpg",
+        "/images/portfoliopage/rootednines.jpg",
       ],
       ratios: [3, 2],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/rootedten.jpg",
-        "/images/portfoliopage/rootedeleven.jpg",
-        "/images/portfoliopage/rootedtwelve.jpg",
+        "/images/portfoliopage/rootedtens.jpg",
+        "/images/portfoliopage/rootedelevens.jpg",
+        "/images/portfoliopage/rootedtwelves.jpg",
       ],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/rootedthirteen.jpg",
-        "/images/portfoliopage/rootedfourteen.jpg",
+        "/images/portfoliopage/rootedthirteens.jpg",
+        "/images/portfoliopage/rootedfourteens.jpg",
       ],
       ratios: [3, 2],
     },
@@ -185,30 +185,30 @@ export const portfolioEvents: PortfolioEvent[] = [
     {
       type: "images",
       images: [
-        "/images/portfoliopage/pureone.jpg",
-        "/images/portfoliopage/puretwo.jpg",
+        "/images/portfoliopage/pureones.jpg",
+        "/images/portfoliopage/puretwos.jpg",
       ],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/purethree.jpg",
-        "/images/portfoliopage/purefour.jpg",
-        "/images/portfoliopage/purefive.jpg",
+        "/images/portfoliopage/purethrees.jpg",
+        "/images/portfoliopage/purefours.jpg",
+        "/images/portfoliopage/purefives.jpg",
       ],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/puresix.jpg",
-        "/images/portfoliopage/pureseven.jpg",
+        "/images/portfoliopage/puresixs.jpg",
+        "/images/portfoliopage/puresevens.jpg",
       ],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/pureeight.jpg",
-        "/images/portfoliopage/purenine.jpg",
+        "/images/portfoliopage/pureeights.jpg",
+        "/images/portfoliopage/purenines.jpg",
       ],
       ratios: [2, 3],
     },
@@ -221,28 +221,28 @@ export const portfolioEvents: PortfolioEvent[] = [
     {
       type: "images",
       images: [
-        "/images/portfoliopage/pureten.jpg",
-        "/images/portfoliopage/pureeleven.jpg",
+        "/images/portfoliopage/puretens.jpg",
+        "/images/portfoliopage/pureelevens.jpg",
       ],
     },
-    { type: "images", images: ["/images/portfoliopage/puretwelve.jpg"] },
-    { type: "images", images: ["/images/portfoliopage/purethirteen.jpg"] },
+    { type: "images", images: ["/images/portfoliopage/puretwelves.jpg"] },
+    { type: "images", images: ["/images/portfoliopage/purethirteens.jpg"] },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/purefourteen.jpg",
-        "/images/portfoliopage/purefifteen.jpg",
+        "/images/portfoliopage/purefourteens.jpg",
+        "/images/portfoliopage/purefifteens.jpg",
       ],
     },
-    { type: "images", images: ["/images/portfoliopage/puresixteen.jpg"] },
+    { type: "images", images: ["/images/portfoliopage/puresixteens.jpg"] },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/pureseventeen.jpg",
-        "/images/portfoliopage/pureeighteen.jpg",
+        "/images/portfoliopage/pureseventeens.jpg",
+        "/images/portfoliopage/pureeighteens.jpg",
       ],
     },
-    { type: "images", images: ["/images/portfoliopage/purenineteen.jpg"] },
+    { type: "images", images: ["/images/portfoliopage/purenineteens.jpg"] },
   ],
 },
     ],
@@ -261,28 +261,28 @@ export const portfolioEvents: PortfolioEvent[] = [
     "The result was a quiet yet beautiful celebration of legacy—one that honoured a life well lived and the generations inspired by it.",
   ],
   gallery: [
-    { type: "images", images: ["/images/portfoliopage/legacyone.jpg"] },
+    { type: "images", images: ["/images/portfoliopage/legacyones.jpg"] },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/legacytwo.jpg",
-        "/images/portfoliopage/legacythree.jpg",
+        "/images/portfoliopage/legacytwos.jpg",
+        "/images/portfoliopage/legacythrees.jpg",
       ],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/legacyfour.jpg",
-        "/images/portfoliopage/legacyfive.jpg",
+        "/images/portfoliopage/legacyfours.jpg",
+        "/images/portfoliopage/legacyfives.jpg",
       ],
       ratios: [2, 3],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/legacysix.jpg",
-        "/images/portfoliopage/legacyseven.jpg",
-        "/images/portfoliopage/legacyeight.jpg",
+        "/images/portfoliopage/legacysixs.jpg",
+        "/images/portfoliopage/legacysevens.jpg",
+        "/images/portfoliopage/legacyeights.jpg",
       ],
     },
     {
@@ -294,35 +294,35 @@ export const portfolioEvents: PortfolioEvent[] = [
     {
       type: "images",
       images: [
-        "/images/portfoliopage/legacynine.jpg",
-        "/images/portfoliopage/legacyten.jpg",
+        "/images/portfoliopage/legacynines.jpg",
+        "/images/portfoliopage/legacytens.jpg",
       ],
       ratios: [3, 2],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/legacyeleven.jpg",
-        "/images/portfoliopage/legacytwelve.jpg",
+        "/images/portfoliopage/legacyelevens.jpg",
+        "/images/portfoliopage/legacytwelves.jpg",
       ],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/legacythirteen.jpg",
-        "/images/portfoliopage/legacyfourteen.jpg",
-        "/images/portfoliopage/legacyfifteen.jpg",
+        "/images/portfoliopage/legacythirteens.jpg",
+        "/images/portfoliopage/legacyfourteens.jpg",
+        "/images/portfoliopage/legacyfifteens.jpg",
       ],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/legacysixteen.jpg",
-        "/images/portfoliopage/legacyseventeen.jpg",
+        "/images/portfoliopage/legacysixteens.jpg",
+        "/images/portfoliopage/legacyseventeens.jpg",
       ],
       ratios: [3, 2],
     },
-    { type: "images", images: ["/images/portfoliopage/legacyeighteen.jpg"] },
+    { type: "images", images: ["/images/portfoliopage/legacyeighteens.jpg"] },
   ],
 },
   {
@@ -342,28 +342,28 @@ export const portfolioEvents: PortfolioEvent[] = [
     {
       type: "images",
       images: [
-        "/images/portfoliopage/lagosone.jpg",
-        "/images/portfoliopage/lagostwo.jpg",
-        "/images/portfoliopage/lagosthree.jpg",
+        "/images/portfoliopage/lagosones.jpg",
+        "/images/portfoliopage/lagostwos.jpg",
+        "/images/portfoliopage/lagosthrees.jpg",
       ],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/lagosfour.jpg",
+        "/images/portfoliopage/lagosfours.jpg",
       ],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/lagosfive.jpg",
-        "/images/portfoliopage/lagossix.jpg",
+        "/images/portfoliopage/lagosfives.jpg",
+        "/images/portfoliopage/lagossixs.jpg",
       ],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/lagosseven.jpg",
+        "/images/portfoliopage/lagossevens.jpg",
       ],
     },
     {
@@ -375,25 +375,25 @@ export const portfolioEvents: PortfolioEvent[] = [
     {
       type: "images",
       images: [
-        "/images/portfoliopage/lagoseight.jpg",
+        "/images/portfoliopage/lagoseights.jpg",
       ],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/lagosnine.jpg",
-        "/images/portfoliopage/lagosten.jpg",
+        "/images/portfoliopage/lagosnines.jpg",
+        "/images/portfoliopage/lagostens.jpg",
       ],
     },
     {
       type: "images",
       images: [
-        "/images/portfoliopage/lagoseleven.jpg",
-        "/images/portfoliopage/lagostwelve.jpg",
+        "/images/portfoliopage/lagoselevens.jpg",
+        "/images/portfoliopage/lagostwelves.jpg",
       ],
       ratios: [3, 2],
     },
-    { type: "images", images: ["/images/portfoliopage/lagosthirteen.jpg"] },
+    { type: "images", images: ["/images/portfoliopage/lagosthirteens.jpg"] },
   ],
   },
 ];
