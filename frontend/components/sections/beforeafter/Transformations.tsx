@@ -169,7 +169,7 @@ interface TransformationProps {
 function Transformation({ item }: TransformationProps) {
     return (
         <div data-scroll-pin className="relative h-[200vh]">
-            <section className="sticky top-[-30px] bg-[#EEEEEE] flex items-center z-10">
+            <section className="sticky top-[-50px] bg-[#EEEEEE] flex items-center z-10">
                 <div className="w-full max-w-7xl 2xl:max-w-[1600px] mx-auto px-6 sm:px-8 md:px-10 lg:px-10 xl:px-14 2xl:px-20 py-10 sm:py-12 md:py-14 lg:py-12 xl:py-16 2xl:py-20">
                     <div className="grid grid-cols-1 lg:grid-cols-10 gap-12 lg:gap-16 xl:gap-20 2xl:gap-24 items-start">
                         <div className={`lg:col-span-6 ${item.sliderOnRight ? "lg:order-1" : "lg:order-2"}`}>
