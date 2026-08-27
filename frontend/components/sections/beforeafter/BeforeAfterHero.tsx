@@ -60,7 +60,7 @@ export default function BeforeAfterHero() {
 
                 {/* & icon — dead center */}
                 <Image
-                    src="/icons/andsign.svg"
+                    src="/icons/andsigns.svg"
                     alt="and"
                     width={144}
                     height={144}
