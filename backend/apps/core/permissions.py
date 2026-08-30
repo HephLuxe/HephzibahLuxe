@@ -1,7 +1,6 @@
 # apps/core/permissions.py
-from rest_framework.permissions import BasePermission
 from rest_framework.exceptions import PermissionDenied
-
+from rest_framework.permissions import BasePermission
 
 # ── DRF class (request-level only, for decorators) ─────────────
 

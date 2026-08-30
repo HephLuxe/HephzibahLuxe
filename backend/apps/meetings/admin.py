@@ -1,7 +1,7 @@
 from django.contrib import admin
+from rest_framework.exceptions import ValidationError
 
 from apps.core.admin import ATTRIBUTION_FIELDS, AttributionAdminMixin
-from rest_framework.exceptions import ValidationError
 
 from . import services
 from .models import (

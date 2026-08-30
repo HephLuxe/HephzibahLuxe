@@ -20,10 +20,17 @@ whitenoise>=6.7,<7
 # ── Media storage (Cloudflare R2 / S3-compatible) ──
 django-storages>=1.14,<2
 boto3>=1.40,<2
+# Pillow is required by Django's ImageField (used by Event/TeamMember/EventContact).
+# Pin range matches the frozen venv version in requirements-dev.txt (pillow==12.1.0).
+Pillow>=12,<13
 
-# ── Background tasks (Celery + Redis) ──
-celery>=5.6,<6
-django-celery-beat>=2.9,<3
+# ── Cache + rate limiting (Redis) ──
+# Redis' only job now. Background work runs in-process (apps/core/background) and
+# scheduling is platform cron (manage.py run_scheduled), so celery,
+# django-celery-beat and their transitive deps (kombu, billiard, amqp, vine) are
+# gone — see docs/adr/0001-remove-celery.md. These two stay: CACHE_REDIS_URL
+# backs rate-limit counters, the inquiry double-submit dedupe and /health/ready/,
+# and settings refuses to boot without it when DEBUG=False.
 redis>=6,<7
 django-redis>=7,<8
 

@@ -1,0 +1,57 @@
+# Grafana provisioning — contact points + routing.
+# Install BEFORE grafana-alert-rules.yaml; the rules route by these names.
+#
+# Replace NTFY_BASE with your ntfy host, e.g. https://ntfy.example.com
+# Topics match docs/OBSERVABILITY_STANDARD.md: grafana-alerts, glitchtip-issues.
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: ntfy-critical
+    receivers:
+      - uid: ntfy-critical
+        type: webhook
+        settings:
+          url: NTFY_BASE/grafana-alerts
+          httpMethod: POST
+          # ntfy reads these headers for priority and phone-side treatment.
+          # Priority 5 = the phone rings through Do Not Disturb.
+          title: '[P1] {{ .CommonLabels.alertname }}'
+          message: |
+            {{ range .Alerts }}{{ .Annotations.summary }}
+            {{ .Annotations.description }}
+            {{ end }}
+
+  - orgId: 1
+    name: ntfy-notify
+    receivers:
+      - uid: ntfy-notify
+        type: webhook
+        settings:
+          url: NTFY_BASE/grafana-alerts
+          httpMethod: POST
+          title: '[P2] {{ .CommonLabels.alertname }}'
+          message: |
+            {{ range .Alerts }}{{ .Annotations.summary }}
+            {{ .Annotations.description }}
+            {{ end }}
+
+policies:
+  - orgId: 1
+    receiver: ntfy-notify          # default: anything unrouted is a notify
+    group_by: [alertname]
+    routes:
+      - receiver: ntfy-critical
+        object_matchers:
+          - ["severity", "=", "critical"]
+        # P1s are individually meaningful — do not batch them into a digest.
+        group_wait: 10s
+        group_interval: 1m
+        repeat_interval: 1h
+      - receiver: ntfy-notify
+        object_matchers:
+          - ["severity", "=", "warning"]
+        group_wait: 2m
+        group_interval: 10m
+        # Once a day is enough for something that is not losing data.
+        repeat_interval: 24h

@@ -1,8 +1,12 @@
+import logging
+
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 from django.utils import timezone
+from django_ratelimit.exceptions import Ratelimited
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -10,8 +14,17 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from apps.core.error_codes import NOT_FOUND, TOKEN_INVALID, VALIDATION_ERROR
+from apps.core.error_codes import (
+    NOT_FOUND,
+    PASSWORD_RESET_REQUIRED,
+    TOKEN_INVALID,
+    VALIDATION_ERROR,
+)
+from apps.core.pagination import UserPageNumberPagination
+from apps.core.ratelimit import resolve_client_ip
+
 from ..core.permissions import IsStaffOrSuperuser, enforce, is_staff_or_superuser
+from . import login_guard, services
 from .serializers import (
     AdminUserCreationSerializer,
     CustomTokenObtainPairSerializer,
@@ -23,9 +36,9 @@ from .serializers import (
     UserSerializer,
     UserUpdateSerializer,
 )
-from . import services
 from .utils import create_password_reset_token, send_password_reset_email
 
+logger = logging.getLogger(__name__)
 
 # ── Envelope helper (see apps/core/exceptions.py for the exception-path half) ──
 
@@ -101,10 +114,29 @@ def list_users(request):
             f"Invalid ordering. Allowed: {', '.join(sorted(allowed_ordering))} (prefix with '-' for descending).",
             VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST,
         )
-    qs = qs.order_by(ordering)
+    # `pk` as a tie-breaker, required now that this list is paged: ordering by
+    # date_joined alone leaves rows sharing a timestamp in an order Postgres
+    # does not promise to repeat, so a row could appear on two pages and another
+    # on none. Harmless while the whole list came back in one response.
+    qs = qs.order_by(ordering, "pk")
 
-    serializer = UserListSerializer(qs, many=True)
-    return Response({"count": len(serializer.data), "results": serializer.data})
+    # ALWAYS paginated, like GET /inquiries/. This used to serialise the entire
+    # directory in one response — every account's email, name, role, active
+    # state, last login and portal id. Rate limiting caps how MANY requests a
+    # caller makes, not how much each one hands over, so a compromised staff
+    # token needed exactly one request for the whole platform's user list.
+    # Bounding the page is the control that actually applies here.
+    #
+    # ?page= walks the rest and ?page_size= widens it to the paginator's max, so
+    # nothing is unreachable — it just costs one request per page.
+    #
+    # The envelope gains `next`/`previous` beside the `count` and `results` this
+    # already returned, so a caller reading those two keys still parses the
+    # response; it receives one page instead of everything.
+    paginator = UserPageNumberPagination()
+    page = paginator.paginate_queryset(qs, request)
+    serializer = UserListSerializer(page, many=True)
+    return paginator.get_paginated_response(serializer.data)
 
 
 @api_view(['PATCH'])
@@ -167,14 +199,32 @@ def set_user_status(request, email):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def UserInfowEmail(request, email):
-    User = get_user_model()
-    try:
-        user = User.objects.get(email=email)
-    except User.DoesNotExist:
-        return _error("User not found.", NOT_FOUND, status.HTTP_404_NOT_FOUND)
+    """
+    One user by email. Readable by staff/superusers, or by that user themselves.
 
-    # Permission check: Only the user themselves, superuser or staff
-    enforce(is_staff_or_superuser(request.user) or request.user == user, "You don't have permission to view this user's information")
+    A caller who may not view this user gets **404, not 403** — deliberately, and
+    it is the whole reason this view does not use the usual
+    get-then-``enforce()`` shape. Looking the row up first and rejecting after
+    turns the status code into a yes/no oracle: 404 means "no account with that
+    address", 403 means "there is one, it just isn't yours". Any authenticated
+    caller, including a client account with no privileges at all, could walk a
+    list of candidate addresses and learn which ones have accounts here — every
+    other client, every staff member, the superuser. Collapsing both cases into
+    the same 404 says only "nothing here for you", which is all an unauthorised
+    caller is entitled to know.
+
+    Nothing is lost for legitimate callers: staff and the user themselves are
+    authorised, so they never see the collapsed response.
+    """
+    User = get_user_model()
+    user = User.objects.filter(email=email).first()
+
+    # One combined check, so "does not exist" and "exists but not yours" are
+    # indistinguishable from outside. Kept as a single condition rather than two
+    # branches returning the same thing, so no later edit can split them apart
+    # and quietly reintroduce the oracle.
+    if user is None or not (is_staff_or_superuser(request.user) or request.user == user):
+        return _error("User not found.", NOT_FOUND, status.HTTP_404_NOT_FOUND)
 
     return Response(UserSerializer(user).data)
 
@@ -256,8 +306,140 @@ class ForcePasswordChangeView(APIView):
 
 
 class MyTokenObtainPairView(TokenObtainPairView):
-    # returns tokens + user data
+    """Login. Returns tokens + user data, and owns its own rate limiting.
+
+    Unlike every other limited endpoint this one is NOT wrapped at the URL, and
+    the reason is the whole of ADR-0002: the decorator increments before the view
+    knows the outcome, so correct logins were spending anti-brute-force budget
+    and an office behind one NAT could lock itself out while doing nothing wrong.
+    Here the tiers are checked on the way in and counted only when authentication
+    actually failed.
+
+    Order of operations matters and is deliberate:
+
+    1. **Check the rate tiers.** Full -> 429 before any password hashing happens.
+    2. **Refuse a locked account before checking its password.** It has to be
+       this way round: verifying first would leave guessing unbounded (and would
+       spend ~68ms of PBKDF2 per guess). The cost is that a correct password
+       cannot rescue a locked account — the recovery path is the password reset,
+       whose code goes to an inbox an attacker cannot read.
+    3. **Authenticate.**
+    4. **On failure** — count it against every tier and against the account, then
+       report either invalid credentials or, once the account has just run out of
+       attempts, that a password reset is now required.
+    5. **On success** — clear the account's failure run, so ordinary fumbling
+       never accumulates toward the ceiling.
+
+    Enumeration note, accepted deliberately: `password_reset_required` is only
+    ever returned for an address that has an account, so five failures reveal
+    whether one exists. The same trade is already made by
+    `utils.verify_reset_code`, which answers TOO_MANY_ATTEMPTS_MESSAGE only for a
+    real token. Bounded by the account tiers for addresses with no account.
+    """
+
     serializer_class = CustomTokenObtainPairSerializer
+
+    def post(self, request, *args, **kwargs):
+        email = ""
+        if isinstance(request.data, dict):
+            email = (request.data.get("email") or "").strip().lower()
+        tiers = login_guard.login_tiers(email)
+
+        full = login_guard.first_full_tier(request, tiers)
+        if full is not None:
+            # WHICH tier fired is the one thing the shared 429 renderer cannot
+            # report — it sees only the exception. Login is the only endpoint
+            # with four tiers on one path, so without this the obvious question
+            # ("is it the burst, the account, or the day?") has no answer in the
+            # logs. Kept at INFO so the alertable WARNING stays the single
+            # `event="rate_limited"` line apps/core/views.ratelimited emits.
+            logger.info(
+                "Login tier exhausted.",
+                extra={
+                    "event": "login_tier_exhausted",
+                    "tier": full["group"],
+                    "retry_after": full["retry_after"],
+                },
+            )
+            # The renderer sees only the exception, so the wait has to travel on
+            # it. Without this a caller blocked by auth_login_daily is told to
+            # come back in 60 seconds and is refused for up to a day.
+            exc = Ratelimited()
+            exc.retry_after = full["retry_after"]
+            raise exc
+
+        # get_user_model() locally, matching the rest of this module.
+        user = get_user_model().objects.filter(email=email).first() if email else None
+
+        # EITHER counter at its ceiling means locked. The email-keyed one exists
+        # so this decision does not depend on whether an account exists — see
+        # login_guard for the enumeration oracle that closes.
+        if login_guard.email_is_locked(email) or (user is not None and user.login_locked()):
+            return self._reset_required(email, user)
+
+        try:
+            response = super().post(request, *args, **kwargs)
+        except AuthenticationFailed:
+            login_guard.record_failed_attempt(request, tiers)
+            # Always counted, account or not — that symmetry IS the fix.
+            login_guard.record_email_failure(email)
+            if user is not None:
+                user.record_failed_login()
+            if login_guard.email_is_locked(email) or (user is not None and user.login_locked()):
+                return self._reset_required(email, user)
+            raise
+
+        # Authentication succeeded. Clear the run — the property that keeps a
+        # per-account counter from becoming a lockout weapon.
+        login_guard.clear_email_failures(email)
+        if user is not None:
+            user.reset_failed_logins()
+        return response
+
+    @staticmethod
+    def _reset_required(email, user):
+        """The 401 that points a locked-out account holder at the reset flow.
+
+        Byte-identical whether or not `email` has an account behind it. That is
+        the whole point — a response that differed would be a user-enumeration
+        oracle costing five wrong passwords. The LOG line does distinguish the
+        two, because the log is not something an attacker can read and "which
+        real account is under attack" is the question an operator has.
+        """
+        logger.warning(
+            "Login refused: out of attempts.",
+            extra={
+                "event": "login_account_locked",
+                "user_id": str(user.id) if user is not None else None,
+                "has_account": user is not None,
+                "failed_login_count": user.failed_login_count if user is not None else None,
+                "email_failure_count": login_guard.email_failure_count(email),
+            },
+        )
+        return _error(
+            "Too many failed sign-in attempts. Reset your password to regain access.",
+            PASSWORD_RESET_REQUIRED,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+    def handle_exception(self, exc):
+        """Let ``Ratelimited`` escape DRF instead of becoming a 403.
+
+        ``Ratelimited`` subclasses Django's ``PermissionDenied``, and DRF's
+        handler maps that to **403**. Every other limited endpoint avoids this by
+        raising *outside* DRF — the decorator sits on the URL, above dispatch —
+        which is exactly what apps/accounts/urls.py's ``_rl`` docstring warns
+        about. This view raises from inside, so it has to opt out by hand.
+
+        Re-raising propagates the exception out of ``dispatch`` to Django, where
+        ``RatelimitMiddleware`` renders ``settings.RATELIMIT_VIEW``. That is the
+        point: login's 429 is then produced by the same code path as every other
+        endpoint's, envelope and ``Retry-After`` included, rather than a
+        hand-rolled copy that could drift.
+        """
+        if isinstance(exc, Ratelimited):
+            raise exc
+        return super().handle_exception(exc)
 
 
 class LogoutView(APIView):
@@ -290,14 +472,6 @@ class PasswordResetRequestView(APIView):
     """
     permission_classes = []  # Public endpoint
 
-    def get_client_ip(self, request):
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
-
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
         if not serializer.is_valid():
@@ -311,9 +485,25 @@ class PasswordResetRequestView(APIView):
 
         try:
             user = User.objects.get(email=email)
-            ip_address = self.get_client_ip(request)
-            token = create_password_reset_token(user, ip_address)
-            send_password_reset_email(user, token.code)
+            # apps.core.ratelimit is the single source of truth for the client
+            # address; this view used to resolve it itself and took the LEFTMOST
+            # X-Forwarded-For entry, which is the one the caller supplies. Two
+            # things followed from that. The audit column recorded whatever the
+            # caller typed, so the one field meant to answer "who asked for this
+            # reset" was worthless. And because the value reached a varchar(45)
+            # column unvalidated, a header longer than 45 characters raised a
+            # DataError here — which, since the except below only catches
+            # DoesNotExist, escaped as a 500 for an email that EXISTS while an
+            # unknown email still returned 200. That made the "always return
+            # success" guarantee directly above a user-enumeration oracle.
+            # resolve_client_ip returns a validated address, so it is at most 45
+            # characters by construction and the column can no longer overflow.
+            ip_address = resolve_client_ip(request)
+            # The plaintext code is returned, never stored — only its hash is
+            # persisted, so this is the one moment it exists. Mail it here or it
+            # is gone (see accounts.utils.create_password_reset_token).
+            _token, code = create_password_reset_token(user, ip_address)
+            send_password_reset_email(user, code)
         except User.DoesNotExist:
             pass  # user doesn't exist, but don't reveal this
 
@@ -369,7 +559,21 @@ class PasswordResetConfirmView(APIView):
         user.set_password(new_password)
         user.force_password_change = False
         user.temporary_password_created_at = None
+        # Completing a reset is the documented way OUT of a login lockout
+        # (ADR-0002): the code was delivered to an inbox an attacker cannot read,
+        # so finishing this flow proves ownership just as the right password
+        # does. Without it an account that reached MAX_FAILED_LOGINS would stay
+        # locked until the 24h window aged out, and the "reset your password"
+        # message the login endpoint returns would be a lie.
+        #
+        # Only here, not in ForcePasswordChangeView: that one requires an
+        # authenticated caller, so a successful login has already cleared the run.
+        user.failed_login_count = 0
+        user.failed_login_at = None
         user.save()
+        # Both counters, or the email-keyed one would keep the account locked
+        # after a recovery the user just proved they were entitled to.
+        login_guard.clear_email_failures(user.email.lower().strip())
 
         token.is_used = True
         token.used_at = timezone.now()

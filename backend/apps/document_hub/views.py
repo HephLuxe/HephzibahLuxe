@@ -26,17 +26,25 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from apps.core.utils import save_with_attribution
-
-from apps.core.error_codes import CONFIRMATION_REQUIRED, NOT_FOUND, PERMISSION_DENIED, VALIDATION_ERROR
+from apps.core.error_codes import (
+    CONFIRMATION_REQUIRED,
+    NOT_FOUND,
+    PERMISSION_DENIED,
+    VALIDATION_ERROR,
+)
 from apps.core.permissions import IsStaffOrSuperuser, is_staff_or_superuser
-from apps.core.utils import parse_decimal
+from apps.core.utils import parse_decimal, save_with_attribution
 from apps.portal.models import ClientPortal
 
 from . import services
 from .models import (
-    ClientDocument, Invoice, PaymentMilestone, PaymentMilestoneStatus, PaymentSchedule,
-    PortalDefaults, Receipt,
+    ClientDocument,
+    Invoice,
+    PaymentMilestone,
+    PaymentMilestoneStatus,
+    PaymentSchedule,
+    PortalDefaults,
+    Receipt,
 )
 from .serializers import (
     ClientDocumentSerializer,
@@ -46,7 +54,6 @@ from .serializers import (
     PortalDefaultsSerializer,
     ReceiptSerializer,
 )
-
 
 # ── Envelope helper (see apps/core/exceptions.py for the exception-path half) ──
 

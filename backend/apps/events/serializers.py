@@ -1,7 +1,8 @@
-from rest_framework.serializers import ModelSerializer, EmailField
 from rest_framework import serializers
+from rest_framework.serializers import EmailField, ModelSerializer
 
 from apps.core.serializers import AttributionSerializerMixin
+from apps.core.uploads import validate_image
 
 from .models import Event, EventDay
 
@@ -17,6 +18,9 @@ class EventSerializer(AttributionSerializerMixin, ModelSerializer):
         model = Event
         fields = '__all__'
         read_only_fields = ['id','slug', 'created_by', 'last_updated_by', 'created_at', 'updated_at']
+
+    def validate_featured_image(self, value):
+        return validate_image(value)
 
     def to_representation(self, instance: Event) -> dict:
         data = super().to_representation(instance)
@@ -47,4 +51,7 @@ class EventDaySerializer(AttributionSerializerMixin, ModelSerializer):
         model = EventDay
         fields = '__all__'
         read_only_fields = ['id', 'owner', 'created_by', 'last_updated_by', 'created_at', 'updated_at']
+
+    def validate_event_images(self, value):
+        return validate_image(value)
         

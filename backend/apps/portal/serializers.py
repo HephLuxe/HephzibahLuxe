@@ -1,10 +1,18 @@
 from rest_framework import serializers
 
 from apps.core.serializers import AttributionSerializerMixin
+from apps.core.uploads import validate_photo
 from apps.core.utils import user_display_name
-from .models import ClientPortal, EventEngagement, PlanningPhase, PortalSettings, PortalTeamAssignment, TeamMember
-from .services import PHASE_ORDER
 
+from .models import (
+    ClientPortal,
+    EventEngagement,
+    PlanningPhase,
+    PortalSettings,
+    PortalTeamAssignment,
+    TeamMember,
+)
+from .services import PHASE_ORDER
 
 # ── TeamMember serializers ──────────────────────────────────────
 
@@ -20,6 +28,9 @@ class TeamMemberSerializer(AttributionSerializerMixin, serializers.ModelSerializ
             "id", "name", "role", "bio", "photo",
             "email", "phone", "is_default", "created_by_display", "last_updated_by_display",
         ]
+
+    def validate_photo(self, value):
+        return validate_photo(value)
 
 
 class TeamMemberListSerializer(serializers.ModelSerializer):

@@ -1,27 +1,25 @@
 from django.shortcuts import get_object_or_404
+from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.core.utils import save_with_attribution
-from rest_framework import status
-
 from apps.core.error_codes import INVALID_TRANSITION, VALIDATION_ERROR
 from apps.core.permissions import IsStaffOrSuperuser, can_access_portal, enforce
+from apps.core.utils import save_with_attribution
 
+from . import services
 from .models import ClientPortal, TeamMember
 from .serializers import (
     ActivateEventSerializer,
+    AssignTeamMemberSerializer,
     PhaseUpdateSerializer,
     PortalOverviewSerializer,
     PortalUpdateSerializer,
-    TeamMemberSerializer,
     TeamMemberListSerializer,
-    AssignTeamMemberSerializer,
+    TeamMemberSerializer,
 )
-from . import services
-
 
 # ── Envelope helper (see apps/core/exceptions.py for the exception-path half) ──
 

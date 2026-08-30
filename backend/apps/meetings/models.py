@@ -1,10 +1,10 @@
 import uuid
 
 from django.db import models
-from django.conf import settings
-from apps.portal.models import ClientPortal, PlanningPhase
+
 from apps.core.models import AttributedModel
 from apps.core.utils import prep_upload_path
+from apps.portal.models import PlanningPhase
 
 
 class MeetingStatus(models.TextChoices):

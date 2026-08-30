@@ -1,8 +1,8 @@
 from django import forms
 from django.contrib import admin
+from rest_framework.exceptions import ValidationError as DRFValidationError
 
 from apps.core.admin import ATTRIBUTION_FIELDS, AttributionAdminMixin
-from rest_framework.exceptions import ValidationError as DRFValidationError
 
 from . import services
 from .models import Conversation

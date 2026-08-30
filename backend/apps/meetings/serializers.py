@@ -1,8 +1,17 @@
 from rest_framework import serializers
 
 from apps.core.serializers import AttributionSerializerMixin
-from .models import Meeting, MeetingNotes, MeetingPrepItem, PrepItemField, PrepItemResponse, PrepItemFileUpload
+
+from .models import (
+    Meeting,
+    MeetingNotes,
+    MeetingPrepItem,
+    PrepItemField,
+    PrepItemFileUpload,
+    PrepItemResponse,
+)
 from .services import field_is_answered
+
 
 class PrepItemFileUploadSerializer(serializers.ModelSerializer):
     file_url = serializers.SerializerMethodField()

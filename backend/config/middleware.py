@@ -1,6 +1,6 @@
 from django.http import JsonResponse
-from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.exceptions import AuthenticationFailed
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from apps.core.error_codes import PERMISSION_DENIED
 

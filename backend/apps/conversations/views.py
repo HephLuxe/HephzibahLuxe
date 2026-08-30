@@ -1,14 +1,15 @@
 from django.shortcuts import get_object_or_404
+from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.core.utils import save_with_attribution
-from rest_framework import status
-
 from apps.core.error_codes import NOT_FOUND, VALIDATION_ERROR
 from apps.core.permissions import IsStaffOrSuperuser, can_access_portal, enforce
+from apps.core.utils import save_with_attribution
 from apps.portal.models import ClientPortal, PlanningPhase
+
+from . import services
 from .models import Conversation, ConversationTag
 from .serializers import (
     ConversationCreateSerializer,
@@ -16,8 +17,6 @@ from .serializers import (
     ConversationListSerializer,
     ConversationUpdateSerializer,
 )
-from . import services
-
 
 # ── Envelope helper (see apps/core/exceptions.py for the exception-path half) ──
 

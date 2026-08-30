@@ -1,30 +1,50 @@
 # apps/events/services.py
 
 import uuid
+from datetime import timedelta
+
+from django.utils import timezone
 
 
 def schedule_event_details_notification(event, what: str) -> None:
     """
     Debounced "event details updated" client email. Every edit to this event OR
     any of its EventDays calls this — rather than emailing immediately per save,
-    it stamps a fresh token on the engagement and schedules a delayed send
+    it stamps a due time on the engagement
     (portal.PortalSettings.event_details_notify_debounce_seconds, admin-
-    configurable, default 15 min). If another edit lands before that delay
-    elapses, the token changes and the earlier, now-stale task no-ops when it
-    fires — only the LAST scheduled task's token still matches, so it's the one
-    that actually sends. A burst of edits therefore collapses into exactly one
-    email, describing the most recent change, sent once the editor has been
-    quiet for the full window — never a fixed deadline the editor has to beat,
-    since editing again just pushes the send further out.
+    configurable, default 15 min). If another edit lands before that time
+    arrives, this runs again and pushes the due time further out, so a burst of
+    edits collapses into exactly one email describing the most recent change,
+    sent once the editor has been quiet for the full window — never a fixed
+    deadline the editor has to beat.
+
+    The send itself is done by apps.events.tasks
+    .dispatch_due_event_details_notifications, a sweep over `due_at` run from
+    cron. Nothing is *scheduled* anywhere but this row: the previous version
+    paired the token with `apply_async(countdown=...)`, which put half the
+    debounce state in a broker message and lost the email outright if a worker
+    restarted or a deploy landed inside the window.
+
+    On top of that row — never instead of it — an in-process timer is armed for
+    the same moment, so the email lands within seconds of the window closing
+    rather than at the next cron run (up to 10 minutes later). It is pure
+    opportunism: it is only armed in the web process, it is dropped by any
+    restart, and it changes nothing about when the work becomes *due*. Both
+    runners are safe to race because the sweep claims each row with a
+    conditional UPDATE before sending, so whichever arrives first wins and the
+    other finds nothing.
+
+    Re-arming replaces the previous timer for this engagement rather than adding
+    one, and a timer that fires early because a later edit pushed `due_at` out
+    simply matches no rows — the debounce reset lives entirely in the column, so
+    the timer needs no cancellation logic or token comparison of its own.
 
     Falls back to sending immediately if the event has no engagement yet (no
-    row to key the debounce token on — rare: engagements are created alongside
-    events in the normal flow) or no celebrant to notify.
+    row to key the debounce on — rare: engagements are created alongside events
+    in the normal flow) or no celebrant to notify.
     """
     from apps.notifications.models import ScheduledTaskSettings
     from apps.portal.models import PortalSettings
-
-    from .tasks import send_event_details_updated_notification_task
 
     if not ScheduledTaskSettings.is_task_enabled("event_details_notification"):
         return
@@ -44,14 +64,23 @@ def schedule_event_details_notification(event, what: str) -> None:
         )
         return
 
-    token = uuid.uuid4()
-    engagement.event_details_notify_token = token
-    engagement.save(update_fields=["event_details_notify_token"])
-
     debounce_seconds = PortalSettings.load().event_details_notify_debounce_seconds
-    send_event_details_updated_notification_task.apply_async(
-        args=[str(engagement.id), str(token), what],
-        countdown=debounce_seconds,
+    engagement.event_details_notify_token = uuid.uuid4()
+    engagement.event_details_notify_due_at = timezone.now() + timedelta(seconds=debounce_seconds)
+    engagement.event_details_notify_what = what
+    engagement.save(update_fields=[
+        "event_details_notify_token",
+        "event_details_notify_due_at",
+        "event_details_notify_what",
+    ])
+
+    # A couple of seconds of slack so the timer cannot wake a hair BEFORE
+    # due_at, find `due_at__lte=now` false, and hand the email back to the cron
+    # sweep it was meant to pre-empt.
+    from .tasks import dispatch_due_event_details_notifications
+    dispatch_due_event_details_notifications.schedule_in(
+        debounce_seconds + 2,
+        key=f"event_details:{engagement.pk}",
     )
 
 
@@ -76,6 +105,7 @@ def build_event_detail(event, request=None) -> dict:
     from apps.contacts.serializers import EventContactListSerializer
     from apps.core.utils import user_display_name
     from apps.portal.services import PHASE_ORDER
+
     from .serializers import EventDaySerializer, EventSerializer
 
     contacts = EventContact.objects.filter(event=event)

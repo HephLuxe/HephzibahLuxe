@@ -48,35 +48,76 @@ shared with contacts and the planning phase).
 ### Client notification is debounced, not immediate
 Updating an event or an event day calls
 `services.schedule_event_details_notification(event, what)` — it does **not**
-email the client right away. Instead it stamps a fresh UUID token onto
-`event.engagement.event_details_notify_token` and schedules
-`events.tasks.send_event_details_updated_notification_task` to run after
-`portal.PortalSettings.event_details_notify_debounce_seconds` — **admin-
-configurable** (default 900s / 15 min), so staff can shorten or lengthen the
-window from the Django admin without a redeploy.
+email the client right away. Instead it stamps three columns on
+`event.engagement`:
 
-**Why:** staff editing several fields — or several event days — in one sitting
-should trigger *one* email, not one per save. A fixed-delay timer alone isn't
-enough either, since it would still pressure an editor to "finish before it
-fires." So this is a **trailing debounce**: every edit re-stamps the token and
-reschedules the send. When a scheduled task finally runs, it checks whether the
-engagement's *current* token still matches the one it was given —
+| Column | Meaning |
+|---|---|
+| `event_details_notify_due_at` | when the debounce window closes. `NULL` = nothing pending. Indexed — the sweep's only query is "everything due at or before now" |
+| `event_details_notify_what` | a human description of the most recent change, rendered in the email |
+| `event_details_notify_token` | audit marker: *which* pending notification this is |
 
-* **matches** → no edit has happened since this task was scheduled → this was
-  the last edit in the burst → send, then clear the token.
-* **doesn't match** → a later edit already replaced the token and scheduled its
-  own (later) task → this task is stale → no-op silently.
+The window is `portal.PortalSettings.event_details_notify_debounce_seconds` —
+**admin-configurable** (default 900s / 15 min), so staff can shorten or lengthen
+it from the Django admin without a redeploy.
 
-The practical effect: as long as an admin keeps editing, no email goes out and
-there's no deadline to race. Once they stop for the full debounce window, one
-email fires describing the most recent change. The email is gated by the
-`event_details_updated` row in `notifications.NotificationTypeSettings` like
-every other notification type (see the `notifications` app). Separately, the
-whole debounce/scheduling mechanism itself can be switched off via the
-`event_details_notification` row in `notifications.ScheduledTaskSettings` —
-when off, `schedule_event_details_notification` doesn't even stamp a token or
-schedule a task, and an already-scheduled task no-ops defensively if toggled
-off mid-flight.
+`events.tasks.dispatch_due_event_details_notifications` is the sweep that
+actually sends. It runs from the `notification_retry` cron group (every 10
+minutes — see `apps/core/management/commands/run_scheduled.py`).
+
+**Why debounce:** staff editing several fields — or several event days — in one
+sitting should trigger *one* email, not one per save. A fixed-delay timer alone
+isn't enough either, since it would still pressure an editor to "finish before it
+fires." So this is a **trailing debounce**: every edit simply pushes `due_at`
+further out and overwrites `what`. As long as an admin keeps editing, nothing is
+due and no email goes out. Once they stop for the full window, the next sweep
+finds one due row and sends one email describing the most recent change.
+
+**How the sweep avoids double-sending.** It clears the schedule **first**, in a
+single `UPDATE … WHERE due_at IS NOT NULL`, and sends only if that UPDATE
+actually claimed the row. Three properties fall out of that ordering:
+
+* Two overlapping sweeps cannot both claim the same row (Render won't start a
+  cron run while the previous one is going, but that is the platform's promise,
+  not ours).
+* A crash between the claim and the send loses one email rather than re-sending
+  it on every sweep for ever.
+* An edit landing between the claim and the send re-stamps its own later
+  `due_at`, so that change gets its own email — which is exactly the debounce
+  semantics.
+
+`what` is read off the in-memory instance, which still holds the value the UPDATE
+just blanked in the database. Deliberate: the row was claimed, so that is the
+description belonging to *this* email.
+
+#### Why this is three columns and not a countdown
+
+It used to be one column plus `apply_async(countdown=900)`, and the task compared
+the token it was handed against the engagement's current one — no-opping if
+superseded. Elegant, but **only half durable**: the token lived in Postgres while
+*"and send at T+900s"* lived in the broker's ETA queue and `what` lived only as a
+task argument. A worker restart or a deploy inside the window could drop the email
+outright, and recovery depended on Celery's `visibility_timeout` redelivery — an
+implementation detail rather than a guarantee we owned. (`visibility_timeout` was
+pinned to 3600s in settings specifically to stay above this countdown.)
+
+Now the whole schedule is a row, so the next sweep sends it no matter what died in
+between. The cost is precision: a 15-minute debounce swept every 10 minutes lands
+15–25 minutes after the last edit rather than exactly 15. For "the planner
+finished editing, tell the client" that is not a meaningful difference, and in
+exchange the debounce survives a deploy. See
+`docs/adr/0001-remove-celery.md`.
+
+#### Toggles
+
+The email is gated by the `event_details_updated` row in
+`notifications.NotificationTypeSettings` like every other notification type (see
+the `notifications` app). Separately, the whole debounce mechanism can be switched
+off via the `event_details_notification` row in
+`notifications.ScheduledTaskSettings` — when off,
+`schedule_event_details_notification` doesn't stamp a due time at all, **and** the
+sweep checks the same gate defensively, so a row stamped before the switch was
+flipped doesn't fire either.
 
 Falls back to sending immediately if the event has no engagement yet (no row to
 key the debounce token on) — a rare case since engagements are normally created

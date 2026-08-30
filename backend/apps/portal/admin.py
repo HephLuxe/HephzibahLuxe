@@ -1,8 +1,8 @@
 from django.contrib import admin
-
-from apps.core.admin import ATTRIBUTION_FIELDS, ATTRIBUTION_FIELDSET, AttributionAdminMixin
 from django.utils.html import format_html
 from rest_framework.exceptions import ValidationError
+
+from apps.core.admin import ATTRIBUTION_FIELDS, ATTRIBUTION_FIELDSET, AttributionAdminMixin
 
 from . import services
 from .models import ClientPortal, EventEngagement, PortalSettings, PortalTeamAssignment, TeamMember

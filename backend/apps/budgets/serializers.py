@@ -6,6 +6,7 @@ from django.core.files.uploadedfile import UploadedFile
 from rest_framework import serializers
 
 from apps.core.serializers import AttributionSerializerMixin
+from apps.core.uploads import MAX_PHOTO_SIZE, validate_upload
 
 from .models import BudgetCategory, BudgetHealthStatus, BudgetPayment, EventBudget
 
@@ -53,13 +54,15 @@ class BudgetPaymentSerializer(AttributionSerializerMixin, serializers.ModelSeria
         read_only_fields = ["id", "created_at"]
 
     def validate_receipt(self, value: UploadedFile | None) -> UploadedFile | None:
-        if value:
-            content_type = getattr(value, "content_type", None)
-            if content_type and content_type not in ALLOWED_RECEIPT_TYPES:
-                raise serializers.ValidationError(
-                    "Receipt must be a PDF or image (JPEG, PNG, WebP)."
-                )
-        return value
+        # A receipt is a photo of a slip or a one-page PDF, so it is held to the
+        # PHOTO ceiling rather than the document one — nothing legitimate here
+        # approaches 5MB, and the fields that do are staff-only by design.
+        return validate_upload(
+            value,
+            max_size=MAX_PHOTO_SIZE,
+            allowed_types=tuple(ALLOWED_RECEIPT_TYPES),
+            label="Receipt",
+        )
 
 
 class EventBudgetOverviewSerializer(AttributionSerializerMixin, serializers.ModelSerializer):

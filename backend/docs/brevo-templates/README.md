@@ -1,12 +1,12 @@
 # Hephzibah Luxe — Brevo Email Templates
 
 The premium, standardized system every transactional email is built on. Each
-of the 11 `NotificationType`s maps 1:1 to a real Brevo template (see
+of the 13 `NotificationType`s maps 1:1 to a real Brevo template (see
 `apps/notifications/README.md`). This folder documents each template's HTML,
 its merge fields, and how to wire it up.
 
 **Start here → [`user_credentials.md`](./user_credentials.md)** — the base
-layout every other template extends. All 11 templates are now fully built
+layout every other template extends. All 13 templates are now fully built
 (§5) on the same colours, button, and footer defined below.
 
 ---
@@ -38,6 +38,8 @@ BREVO_TEMPLATE_DOCUMENT_ADDED=
 BREVO_TEMPLATE_INVOICE_ISSUED=
 BREVO_TEMPLATE_RECEIPT_ISSUED=
 BREVO_TEMPLATE_MILESTONE_PAID=
+BREVO_TEMPLATE_INQUIRY_RECEIVED=
+BREVO_TEMPLATE_INQUIRY_SUBMITTED_INTERNAL=
 ```
 
 Merge fields are referenced in Brevo as `{{ params.FIELD }}` — the keys are
@@ -99,12 +101,23 @@ then copy the URL it gives you and replace `LOGO_URL_HERE`. Keep `alt="Hephzibah
 Luxe"` so the brand still reads if images are blocked. The gold tagline
 *"Event Planning & Design Studio"* is live text, so the header never looks empty.
 
-### Generic-CTA templates: `PORTAL_BASE_URL_HERE`
+### CTA placeholders: `PORTAL_BASE_URL_HERE` and `SITE_BASE_URL_HERE`
 Only two templates carry their own deep-link param
-(`user_credentials`→`login_url`, `new_reminder`→`link_url`). The other nine
-notification types have no per-record URL in their `context` dict — rather
-than a bare "sign in" link, each CTA points at the real static section route
-(pulled straight from `apps/core/deeplinks.py`'s `TARGET_TYPES`, not guessed):
+(`user_credentials`→`login_url`, `new_reminder`→`link_url`). The remaining
+eleven have no per-record URL in their `context` dict, and they do not all
+resolve the same way — the split is:
+
+- **Eight point at a static portal route** — rather than a bare "sign in" link,
+  each CTA points at the real section route (pulled straight from
+  `apps/core/deeplinks.py`'s `TARGET_TYPES`, not guessed). Table below.
+- **One points outside the portal entirely** — `inquiry_received` links to the
+  public marketing site via `SITE_BASE_URL_HERE`, not `PORTAL_BASE_URL_HERE`.
+- **Two carry no CTA at all** — `password_reset` and
+  `inquiry_submitted_internal`. Neither has a placeholder to replace.
+
+The eight portal routes (the last row is `new_reminder`'s fallback, which is
+not one of the eight — it is listed here because that is where its CTA lands
+when `link_url` comes through empty):
 
 | Template | Route |
 |---|---|
@@ -120,6 +133,30 @@ Replace `PORTAL_BASE_URL_HERE` (once per template) with your deployed
 frontend root — the same value as `settings.FRONTEND_BASE_URL`. The path
 suffix is already hardcoded correctly in each template; don't change it
 unless the frontend route itself is renamed in `deeplinks.py`.
+
+**`SITE_BASE_URL_HERE` — a second placeholder, for a different origin.** It
+exists because of one recipient type: a lead. `inquiry_received` is sent to
+someone who has just filled in the public contact form — no account, no
+credentials, no `Event` row — so a `/portal/...` URL would drop them on a login
+wall. Its "View our past projects" CTA therefore points at the **public
+marketing site** (`SITE_BASE_URL_HERE/projects`), which is a different thing
+from `settings.FRONTEND_BASE_URL` even in the deployments where the two happen
+to share a hostname. The names are kept distinct precisely so a blind
+find-and-replace of `PORTAL_BASE_URL_HERE` can't quietly start mailing leads a
+login screen. Like the portal links, it is substituted by hand in Brevo rather
+than passed as a param — nothing about the URL is per-record. One caveat the
+portal placeholder does not have: the `/projects` suffix is **not** pinned by
+`deeplinks.py` — the marketing site's routes live outside this repo — so verify
+it against the live site rather than trusting it the way you can trust the
+portal routes above.
+
+**No-CTA templates need no placeholder, and that is deliberate in both cases.**
+`password_reset` omits it because the user is already in the app typing the
+code; `inquiry_submitted_internal` omits it because the only useful destination
+for staff is the Django admin, which lives on the *backend* origin — naming
+that origin would mean a second base-URL env var beside `FRONTEND_BASE_URL`,
+the exact drift hazard `config/settings.py` argues against. Adding a button to
+either is a regression, not an improvement.
 
 ### Bulletproof pill button
 Rounded corners need a VML fallback or Outlook renders a square. Always ship
@@ -172,7 +209,7 @@ amounts, payment summaries, event details, etc.
 
 ---
 
-## 5. The 11 templates — all built
+## 5. The 13 templates — all built
 
 | Doc | `template_name` | Env var | Merge fields |
 |---|---|---|---|
@@ -187,6 +224,8 @@ amounts, payment summaries, event details, etc.
 | [invoice_issued.md](./invoice_issued.md) | `invoice_issued` | `BREVO_TEMPLATE_INVOICE_ISSUED` | `invoice_number`, `amount`, `due_on`, `event_title` |
 | [receipt_issued.md](./receipt_issued.md) | `receipt_issued` | `BREVO_TEMPLATE_RECEIPT_ISSUED` | `receipt_number`, `amount`, `payment_for`, `event_title` |
 | [milestone_paid.md](./milestone_paid.md) | `milestone_paid` | `BREVO_TEMPLATE_MILESTONE_PAID` | `label`, `amount`, `paid_on`, `event_title` |
+| [inquiry_received.md](./inquiry_received.md) | `inquiry_received` | `BREVO_TEMPLATE_INQUIRY_RECEIVED` | `first_name` |
+| [inquiry_submitted_internal.md](./inquiry_submitted_internal.md) | `inquiry_submitted_internal` | `BREVO_TEMPLATE_INQUIRY_SUBMITTED_INTERNAL` | `recipient_name`, `first_name`, `last_name`, `email`, `phone_number`, `contact_mode`, `event_type`, `desired_location`, `preferred_start_date`, `preferred_end_date`, `budget`, `details`, `submitted_at`, `inquiry_id` |
 
 > Amounts arrive as **strings** (`Decimal` is serialised to `str`), dates as
 > **ISO strings** (`_serialise_context` in `notifications/services.py`). Format

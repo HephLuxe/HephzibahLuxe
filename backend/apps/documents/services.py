@@ -1,5 +1,6 @@
 from django.contrib.contenttypes.models import ContentType
-from .models import Document, DocumentCategory
+
+from .models import Document
 
 
 def register_document(engagement, source_instance, file_path: str, category: str, uploaded_by=None, file_size=None, mime_type=""):

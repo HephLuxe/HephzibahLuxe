@@ -1,9 +1,11 @@
-import uuid
 import os
+import uuid
+
+from django.conf import settings
 from django.db import models
 
 from apps.core.models import AttributedModel
-from django.conf import settings
+
 
 # Create your models here.
 class PlanningPhase(models.TextChoices):
@@ -119,13 +121,37 @@ class EventEngagement(AttributedModel):
         related_name="phase_updates",
     )
     phase_updated_at = models.DateTimeField(null=True, blank=True)
-    # Debounce marker for the "event details updated" client email (see
-    # apps.events.services.schedule_event_details_notification /
-    # apps.events.tasks). Every edit to this engagement's Event or any of its
-    # EventDays stamps a fresh token and schedules a delayed send; a task whose
-    # token no longer matches this field has been superseded by a later edit
-    # and no-ops, so a burst of edits collapses into exactly one email.
+    # ── Debounce state for the "event details updated" client email ──
+    #
+    # Every edit to this engagement's Event or any of its EventDays re-stamps all
+    # three fields (apps.events.services.schedule_event_details_notification), so
+    # a burst of edits collapses into exactly one email describing the most
+    # recent change, sent once the editor has been quiet for the full window.
+    # apps.events.tasks.dispatch_due_event_details_notifications is the sweep
+    # that picks up whatever is due.
+    #
+    # All three are columns on purpose. This used to be one column plus a Celery
+    # `apply_async(countdown=900)`: the token was durable, but "and send it at
+    # T+900s" lived only in the broker's ETA queue, and `what` lived only as a
+    # task argument. Half the state in Postgres and half in a message meant a
+    # worker restart or a deploy inside the window could drop the email entirely
+    # — recovery depended on `visibility_timeout` redelivery, an implementation
+    # detail rather than a guarantee. Now the whole schedule is a row, so the
+    # next sweep sends it no matter what died in between.
+    #
+    # The token is now an audit marker rather than the supersession mechanism —
+    # `due_at` carries that, since a later edit simply pushes it further out and
+    # the sweep claims a row by nulling it. Kept because "which pending
+    # notification is this?" is a question worth being able to answer in the
+    # admin and in logs, and it is what the old task's arguments were keyed on.
     event_details_notify_token = models.UUIDField(null=True, blank=True)
+    # When the debounce window closes. NULL = nothing pending. Indexed because
+    # the sweep's only query is "everything due at or before now".
+    event_details_notify_due_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    # Human description of the most recent change ("the event date", "a contact",
+    # ...), rendered in the email body. Travelled as a task argument before there
+    # was anywhere durable to put it.
+    event_details_notify_what = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

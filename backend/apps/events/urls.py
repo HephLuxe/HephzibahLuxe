@@ -1,6 +1,6 @@
 from django.urls import path
-from . import views
 
+from . import views
 
 urlpatterns = [
     path('event/create/', views.create_event, name ='create_event'), # POST — Permission check: Only the superuser, or staff can

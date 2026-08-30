@@ -1,8 +1,9 @@
 import uuid
 
+from django.conf import settings
 from django.db import models
 from django.utils.text import slugify
-from django.conf import settings
+
 from apps.core.models import AttributedModel
 from apps.core.storages import select_public_media_storage
 from apps.core.utils import event_cover_upload_path, event_image_upload_path

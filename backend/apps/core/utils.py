@@ -1,7 +1,6 @@
 import os
 from decimal import Decimal, InvalidOperation
 
-
 # ── Attribution ──────────────────────────────────────────────────
 
 def user_display_name(user) -> str:

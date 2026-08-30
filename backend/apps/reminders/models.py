@@ -10,7 +10,6 @@ Empty state ("You're All Caught Up") is a frontend concern — the API simply
 returns an empty list when nothing is pending.
 """
 
-from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models

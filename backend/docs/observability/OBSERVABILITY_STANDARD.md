@@ -40,10 +40,19 @@ Everything is **env-gated**: an unset DSN / Loki URL / cache URL makes that sink
 a silent no-op, so local, CI, and test stay quiet with zero config.
 
 1. **Correlation** — an `X-Request-ID` per request (inbound header or generated),
-   held in a `ContextVar`, echoed on the response, and propagated into Celery
-   tasks so a request + the jobs it enqueues share one id.
-   *(Hepz: `apps/core/middleware.py` + the Celery handlers in
-   `apps/core/observability.py`.)*
+   held in a `ContextVar`, echoed on the response, and carried into background
+   work so a request + the jobs it dispatches share one id.
+   How that propagation happens depends on where the work runs, and this is the
+   part that is easy to get silently wrong:
+   - **In-process (thread pool):** a `ContextVar` is **not** inherited by a new
+     thread, so the dispatcher must `contextvars.copy_context()` and run the job
+     inside it. Without that, every background log line loses its `request_id`
+     and the app *appears* compliant because nothing errors.
+   - **Across a broker:** stamp the id as a message header on publish and restore
+     it into the consumer's `ContextVar` before the job body runs.
+   *(Hepz: `apps/core/middleware.py` + `apps/core/background.py`. It previously
+   did the broker variant, via three Celery signal handlers in
+   `apps/core/observability.py`; those are gone with Celery.)*
 2. **Structured logging** — one JSON object per line to stdout, stable fields
    `timestamp, level, logger, message, request_id, user_id`, plus a reserved
    **`event`** key for notable signals. A shared `scrub()` redacts secrets
@@ -51,22 +60,52 @@ a silent no-op, so local, CI, and test stay quiet with zero config.
    the Sentry `before_send`. Console format is allowed **only** in local dev.
    *(Hepz: `apps/core/logging.py`.)*
 3. **Error / trace capture** — DSN-guarded Sentry SDK pointed at GlitchTip,
-   `send_default_pii=False`, `before_send=scrub`, Django+Celery+Redis
-   integrations, `traces_sample_rate` + `release` from env.
-   *(Hepz: `apps/core/observability.py:init_sentry`.)*
+   `send_default_pii=False`, `before_send=scrub`, integrations for whatever the
+   repo actually runs (Hepz: Django + Redis), `traces_sample_rate` + `release`
+   from env. **Background work must be captured explicitly:** a thread that
+   raises disappears without a trace, which is worse than a broker — so the
+   dispatcher catches broadly, logs with `exc_info`, and lets Sentry's logging
+   integration report it.
+   *(Hepz: `apps/core/observability.py:init_sentry`, `apps/core/background.py`.)*
 4. **Health endpoints** — `GET /health/` (liveness, no I/O, **no auth**, no DB
    dependency) and `GET /health/ready/` (checks DB, and cache if configured;
    503 on failure), mounted **outside** any API version prefix. `/health/` is a
    hard requirement of the home-server control-panel onboarding wizard.
    *(Hepz: `apps/core/views.py` + `config/urls.py`.)*
-5. **Scheduling** — `django-celery-beat` with the **DatabaseScheduler**, so
-   every periodic task's timing is admin-editable and matches the home server's
-   `celerybeat@.service` unit (which hardcodes that scheduler). Ship defaults via
-   an idempotent `seed_periodic_tasks` management command; run it after `migrate`
-   on every deploy. **A static `CELERY_BEAT_SCHEDULE` is forbidden** — the home
-   `celerybeat@` unit silently ignores it, stranding every periodic task.
+5. **Scheduling** — **the scheduler must not poll a billed store.** This clause
+   replaces an earlier one that mandated `django-celery-beat` with the
+   DatabaseScheduler, on the strength of admin-editable timing. That was the right
+   trade against an always-on database and the wrong one against serverless
+   Postgres: the scheduler's own 5-second poll of
+   `django_celery_beat_periodictasks` kept the compute awake permanently, *with
+   every task disabled*, which cost more than admin-editable timing was worth.
+
+   Use the platform's own cron to invoke a command that runs one group of tasks
+   and **exits** (Hepz: `manage.py run_scheduled <group>`,
+   `docs/adr/0001-remove-celery.md`). Requirements:
+   - Group by cadence, not one cron entry per job.
+   - A failing task must not strand the rest of its group; exit **non-zero** if
+     any failed, so the platform's own run history is the alerting surface.
+   - Keep the per-task admin **on/off** switch (Hepz:
+     `notifications.ScheduledTaskSettings`, checked as each task's first
+     statement). Timing moves to the cron schedule; the kill switch should not.
+   - **Every deferred task needs a durable status field and a sweep that
+     re-drives it.** A task that can only be triggered once will be lost, and
+     that is a telemetry problem as much as a correctness one: work that vanishes
+     emits nothing at all.
 6. **Event taxonomy** — attach `event="<slug>"` to any log line an alert rule
-   should match (e.g. `brevo_outage`, `brevo_recovered`, `brevo_send_failed`).
+   should match (e.g. `brevo_outage`, `brevo_recovered`, `brevo_send_failed`,
+   `brevo_send_deferred`, `notifications_purged`, `event_details_dispatched`,
+   `reset_tokens_pruned`, `reset_code_rejected`, `unknown_timezone`,
+   `inquiry_no_recipients`).
+
+   Two of those are worth calling out as the pattern for fail-soft code paths.
+   `reset_code_rejected` carries `attempt_count` and `token_burned`, so a
+   distributed guessing attempt is visible as a rate rather than as individual
+   noise. `unknown_timezone` fires where the code deliberately degrades to a
+   default instead of raising — a silent fallback that emits nothing is
+   indistinguishable from correct behaviour, which is how misconfiguration
+   survives for months.
    Alert on the label, never on message text.
 
 ---
@@ -83,8 +122,7 @@ a silent no-op, so local, CI, and test stay quiet with zero config.
 | `SENTRY_RELEASE` | optional | Usually the git SHA, set by CI. |
 | `LOKI_PUSH_URL` | optional (blank ⇒ off) | Loki push endpoint. Blank = no Loki handler is even constructed. |
 | `LOKI_PUSH_USER` / `LOKI_PUSH_PASSWORD` | optional | HTTP basic auth for Loki. |
-| `REDIS_URL` | recommended | Redis for Celery (broker + result backend). |
-| `CACHE_REDIS_URL` | optional (blank ⇒ LocMem) | Redis for the Django cache — a **separate** DB index from the broker; backs rate-limit counters + `/health/ready`. |
+| `CACHE_REDIS_URL` | optional (blank ⇒ LocMem) | Redis for the Django cache; backs rate-limit counters + `/health/ready`. Give it its own DB index on a shared instance. Required whenever `DEBUG=False` (LocMem is per-process, so multi-worker rate limits silently multiply). |
 
 Every var must appear in `.env.example` with a `(required)`/`(optional …)` marker
 **and** be read in settings under the *same* name — the control panel builds its
@@ -116,24 +154,24 @@ the sink is unreachable; treat a home-only sink as best-effort, see §7).
 ## 5. Adoption checklist (new repo)
 
 1. Add deps: `sentry-sdk`, `python-json-logger`, `python-logging-loki`,
-   `django-celery-beat`, `django-redis`, `requests`.
+   `django-redis`, `requests`.
 2. Copy `apps/core/{middleware,logging,observability,views}.py`; rename the
    JSON formatter to `<App>JsonFormatter`; set the Loki `service` tag.
-3. Register `RequestIDMiddleware` right after `SecurityMiddleware`; import
-   `apps.core.observability` from the core `AppConfig.ready()` so the Celery
-   correlation handlers connect even with Sentry off.
+3. Register `RequestIDMiddleware` right after `SecurityMiddleware`.
 4. Add the settings block: build `LOGGING` via `build_logging_config(...)`, call
-   `init_sentry(...)` only when `SENTRY_DSN` is set, add the optional
-   `django-redis` cache gated on `CACHE_REDIS_URL` (its own Redis DB, separate
-   from the Celery broker).
-5. Add `django_celery_beat` to `INSTALLED_APPS`, set
-   `CELERY_BEAT_SCHEDULER='django_celery_beat.schedulers:DatabaseScheduler'`,
-   delete any static `CELERY_BEAT_SCHEDULE`, and add a `seed_periodic_tasks`
-   command with the shipped defaults.
-6. Mount `/health/` + `/health/ready/` outside the API prefix (plain Django
+   `init_sentry(...)` only when `SENTRY_DSN` is set, add the `django-redis` cache
+   gated on `CACHE_REDIS_URL` (its own Redis DB index).
+5. Copy `apps/core/background.py` and enable async dispatch from `wsgi.py`
+   **only** — a short-lived process must run deferred work inline rather than
+   hand it to a pool that dies with the command. Verify the `contextvars` copy in
+   §2.1: it is the whole of correlation for background work.
+6. Copy `apps/core/management/commands/run_scheduled.py`, define the groups, and
+   create one platform-cron service per group.
+7. Mount `/health/` + `/health/ready/` outside the API prefix (plain Django
    views — no DRF auth/throttle).
-7. Add every env var to `.env.example` with markers.
-8. Deploy runs `migrate` → `seed_periodic_tasks` (both idempotent).
+8. Add every env var to `.env.example` with markers.
+9. Deploy runs `migrate` (idempotent) as the **web** service's release step only —
+   never from a cron service, or two processes race a fresh database.
 
 ---
 

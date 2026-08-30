@@ -1,18 +1,56 @@
-from rest_framework.serializers import ModelSerializer
 from django.contrib.auth import get_user_model
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from rest_framework import serializers
 from django.utils import timezone
-
+from rest_framework import serializers
+from rest_framework.serializers import ModelSerializer
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 User = get_user_model()
 
+class TimezoneField(serializers.CharField):
+    """An IANA timezone name, or "" to inherit the platform default.
+
+    Validated here rather than with `choices=`: the IANA database gains, renames
+    and merges zones, and pinning ~600 names into the model would turn every
+    tzdata update into a migration. `zoneinfo` already knows the current set, so
+    ask it.
+    """
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("required", False)
+        kwargs.setdefault("allow_blank", True)
+        kwargs.setdefault("max_length", 64)
+        super().__init__(**kwargs)
+
+    def to_internal_value(self, data):
+        value = super().to_internal_value(data)
+        if not value:
+            return ""
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise serializers.ValidationError(
+                f"{value!r} is not a known IANA timezone name (e.g. 'Africa/Lagos')."
+            ) from None
+        return value
+
+
 class UserSerializer(ModelSerializer):
+    """The read surface for an account (GET /users/me/, GET /users/<email>/).
+
+    `timezone` is exposed so a client can see what it is set to; it is written
+    through PATCH /users/me/update/ (UserUpdateSerializer) or by staff in the
+    Django admin.
+    """
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'date_joined']
-        read_only_fields = ['id', 'date_joined']
+        fields = ['id', 'email', 'first_name', 'last_name', 'date_joined', 'timezone']
+        # email is read-only here too. This serializer is output-only today, so
+        # that changes nothing — it is here so that wiring it to a PATCH later
+        # cannot quietly reintroduce the unverified identity change that
+        # UserUpdateSerializer documents at length.
+        read_only_fields = ['id', 'date_joined', 'email']
 
 
 class UserListSerializer(ModelSerializer):
@@ -102,10 +140,70 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return data
 
 class UserUpdateSerializer(ModelSerializer):
+    """PATCH|PUT /users/me/update/ — an account editing itself.
+
+    `timezone` is here rather than admin-only on purpose. It decides which
+    calendar day this account's payment-due and meeting-prep digests are computed
+    against (apps/core/timezones.py), and on a platform used worldwide the person
+    who knows the answer is the account holder — a client in Auckland should not
+    have to ask staff in Lagos to set it for them. Blank inherits
+    settings.PLATFORM_DEFAULT_TIMEZONE.
+
+    `email` is deliberately NOT writable here, and it is the one field on this
+    model where self-service is the wrong default.
+    -------------------------------------------------------------------------
+    It is USERNAME_FIELD. Changing it changes the account's login identity and
+    redirects every future password-reset code and credentials email with it —
+    unverified, so a typo silently sends all of them to an address the account
+    holder does not control, and the lockout is only discovered at the next
+    reset, which is exactly when recovery is already needed.
+
+    A second, quieter effect: notifications.views._recipient_q falls back to
+    `recipient_email__iexact` (it must, so a lead who later becomes a client can
+    still read the acknowledgement sent before their account existed). Rewriting
+    your own email therefore rewrites which notification rows you can read.
+    `unique=True` stops you taking a LIVE account's address, but a deleted
+    user's is free.
+
+    Accounts here are staff-provisioned (`register_user` is staff-only), so
+    self-service was never the flow that created them — routing changes through
+    staff costs a client nothing and puts a human identity check in front of a
+    login-identity change. The Django admin edits this field.
+
+    If self-service is wanted later, the shape is a verified change: a code to
+    the NEW address to prove ownership, plus a notice to the OLD one so the
+    original owner can react. That is a feature, not a widened serializer.
+    """
+    timezone = TimezoneField()
+
     class Meta:
         model = User
-        fields =['id', 'email', 'first_name', 'last_name']
-        read_only_fields = ['id']
+        fields = ['id', 'email', 'first_name', 'last_name', 'timezone']
+        read_only_fields = ['id', 'email']
+
+    def validate(self, attrs):
+        """Reject a submitted email change rather than dropping it.
+
+        `read_only_fields` alone would strip it silently: the caller gets a 200
+        with the old address echoed back, believes the change landed, and finds
+        out at the next password reset. A 400 that says where to go is the whole
+        difference between a control and a trap.
+
+        Only a DIFFERENT address is refused — a PUT that echoes the account's
+        current email back (the natural shape of "load the object, edit one
+        field, send it all") is not trying to change anything and must not be
+        punished for it.
+        """
+        submitted = (self.initial_data or {}).get("email")
+        if submitted and self.instance:
+            if str(submitted).strip().lower() != self.instance.email.lower():
+                raise serializers.ValidationError({
+                    "email": (
+                        "Your sign-in email cannot be changed here. Contact your "
+                        "planning team to update it."
+                    )
+                })
+        return attrs
 
 
 
@@ -114,14 +212,16 @@ class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
     def validate_email(self, value: str) -> str:
-        """Validate that email exists in database"""
-        User = get_user_model()
-        try:
-            user = User.objects.get(email=value)
-        except User.DoesNotExist:
-            # Don't reveal if email exists (security: prevent user enumeration)
-            # Return success message either way
-            pass
+        """Accept any well-formed address, whether or not it has an account.
+
+        Deliberately does NOT reject an unknown email: a 400 here would make this
+        endpoint a user-enumeration oracle. The view answers 200 either way and
+        only sends mail if the account exists.
+
+        There is intentionally no lookup at all — an earlier version fetched the
+        user into an unused variable, which read like a check that had been
+        forgotten rather than one that must not exist.
+        """
         return value
 
 

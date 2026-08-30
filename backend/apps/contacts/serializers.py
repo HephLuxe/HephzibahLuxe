@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from apps.core.serializers import AttributionSerializerMixin
+from apps.core.uploads import validate_photo
 
 from .models import EventContact
 
@@ -29,6 +30,9 @@ class EventContactSerializer(AttributionSerializerMixin, serializers.ModelSerial
             "updated_at", "last_updated_by_display",
         ]
         read_only_fields = ["id", "event", "created_at", "updated_at"]
+
+    def validate_photo(self, value):
+        return validate_photo(value)
 
 
 class EventContactListSerializer(AttributionSerializerMixin, serializers.ModelSerializer):
@@ -80,3 +84,6 @@ class EventContactCreateSerializer(serializers.ModelSerializer):
             "event_day", "category", "name", "role", "phone", "email",
             "preferred_method", "photo",
         ]
+
+    def validate_photo(self, value):
+        return validate_photo(value)

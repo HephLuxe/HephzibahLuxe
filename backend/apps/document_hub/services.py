@@ -8,11 +8,11 @@ import os
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.core.files.base import ContentFile
-
-from apps.core.utils import stamp_attribution
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
+
+from apps.core.utils import stamp_attribution
 
 from .models import (
     ClientDocument,
@@ -21,7 +21,6 @@ from .models import (
     PortalDefaults,
     ReferenceCounter,
 )
-
 
 # ── Contract payment split ───────────────────────────────────────
 #

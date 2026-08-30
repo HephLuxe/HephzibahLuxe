@@ -41,7 +41,6 @@ from .serializers import (
     ReminderUpdateSerializer,
 )
 
-
 # ── Envelope helper ─────────────────────────────────────────────
 
 def _error(detail: str, code: str, http_status: int, errors: dict | None = None) -> Response:

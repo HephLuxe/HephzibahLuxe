@@ -1,52 +1,79 @@
 """
 apps/notifications/tasks.py
 
-send_notification_task           — single send, retries up to 3x with exponential backoff
-retry_failed_notifications_task  — hourly sweep for stuck failed notifications
-cleanup_old_notifications_task   — weekly purge of sent notifications > 90 days old
+send_notification_task           — single send, one attempt per dispatch
+retry_failed_notifications_task  — the sweep: re-drives FAILED *and* stranded
+                                   QUEUED rows (cron group `notification_retry`)
+cleanup_old_notifications_task   — weekly purge of terminal rows > 90 days old
 
-Mirrors the retry/backoff shape already used in apps/accounts/tasks.py, but
-routed through a durable Notification row instead of a fire-and-forget task,
-so failures are queryable (admin, support) rather than only visible in logs.
+Delivery is routed through a durable Notification row rather than a
+fire-and-forget job, so failures are queryable (admin, support) rather than only
+visible in logs. That durable row is now load-bearing rather than merely nice:
+there is no broker, so if the web process dies mid-send the row is the *only*
+record that the send was ever wanted. See docs/adr/0001-remove-celery.md.
 """
 
 import logging
 from datetime import timedelta
 
-from celery import shared_task
 from django.utils import timezone
+
+from apps.core.background import background_task
 
 logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 3
-# Flat wait between retries — deliberately NOT exponential backoff. Three tries
-# five minutes apart is easy to reason about; a growing delay just makes "when
-# does it stop?" impossible to answer at a glance.
-RETRY_DELAY_SECONDS = 300
 # Absolute give-up window for a row that never even got a real attempt. The
 # outage path deliberately doesn't spend the attempt budget (see send_now), which
-# is right for a blip but would otherwise let a row be re-queued hourly forever
-# if Brevo never came back. After this long, stop: mark it ABANDONED.
+# is right for a blip but would otherwise let a row be re-queued forever if Brevo
+# never came back. After this long, stop: mark it ABANDONED.
 GIVE_UP_AFTER_DAYS = 7
+# How long a row may sit in QUEUED before the sweep assumes its in-process
+# dispatch was lost and re-drives it. See the docstring on the sweep — this is
+# the hole the broker used to plug, and closing it is what makes a broker-less
+# dispatch safe.
+STRANDED_AFTER = timedelta(minutes=10)
+# Templates whose content expires. A password-reset code is dead 30 minutes
+# after it is minted (apps/accounts/utils.create_password_reset_token), and a
+# credentials email is the user's only way in — so the sweep re-drives these
+# before anything else rather than working through a flat queue of digests.
+PRIORITY_TEMPLATES = ("password_reset", "user_credentials")
+# Non-terminal statuses the sweep re-drives unconditionally. QUEUED is handled
+# separately because it needs an age floor (see STRANDED_AFTER); these two do not
+# — a FAILED or DEFERRED row has already had its turn.
+# Values, not enum members, because this module deliberately imports models
+# lazily inside each task (they are imported at call time, not module import
+# time, so the tasks can be imported before the app registry is ready).
+RETRYABLE_STATUSES = ("failed", "deferred")
 
 
-@shared_task(
-    bind=True,
-    max_retries=MAX_ATTEMPTS - 1,       # first attempt + 2 retries = 3 total
-    default_retry_delay=60,             # base seconds; multiplied below
-    acks_late=True,
-    reject_on_worker_lost=True,
-)
-def send_notification_task(self, notification_id: str, force: bool = False) -> None:
-    """Attempt to send a single Notification. Retries with exponential backoff on failure.
+@background_task(name="notifications.send")
+def send_notification_task(notification_id: str, force: bool = False) -> None:
+    """Attempt to send a single Notification. Exactly ONE attempt per dispatch.
+
+    There is deliberately no in-task retry. The old `self.retry(countdown=300)`
+    could not survive the move off Celery, and not only for want of a broker:
+    `send_now()` increments `attempt_count` on every call, so an in-thread retry
+    loop would burn all three attempts inside one dispatch — and the sweep, which
+    filters `attempt_count__lt=MAX_ATTEMPTS`, would then skip the row forever.
+
+    So the cron sweep (`retry_failed_notifications_task`, group
+    `notification_retry`) is the one and only retry path. Its cadence is
+    therefore load-bearing, not cosmetic: it is the ceiling on how long a
+    password-reset email can be delayed.
 
     ``force`` bypasses the Brevo circuit breaker. Normal enqueues leave it False,
     so while Brevo is known-down they park instead of hammering a dead API. The
-    hourly retry sweep and the drain-on-recovery pass force=True, so they genuinely
-    re-attempt (half-open) and thus detect recovery even if the active probe is off.
+    sweep and the drain-on-recovery pass force=True, so they genuinely
+    re-attempt (half-open) and thus detect recovery.
     """
     from apps.notifications.models import Notification, NotificationStatus, ServiceHealthState
-    from apps.notifications.services import BREVO_SERVICE, send_now
+    from apps.notifications.services import (
+        AUTH_SECRET_TEMPLATES,
+        BREVO_SERVICE,
+        REDACTED_CONTEXT,
+        send_now,
+    )
 
     try:
         notification = Notification.objects.get(id=notification_id)
@@ -58,11 +85,11 @@ def send_notification_task(self, notification_id: str, force: bool = False) -> N
         return  # idempotent guard
 
     # Circuit breaker: Brevo is known-down and this is a normal delivery — park
-    # it rather than hammer a dead API and burn the retry budget. Leave it
-    # FAILED-with-attempts-remaining so the hourly sweep + drain-on-recovery
-    # re-attempt it; do NOT self.retry (that would exhaust max_retries mid-outage).
+    # it rather than hammer a dead API and burn the retry budget. DEFERRED, not
+    # FAILED: nothing was attempted, attempt_count stays 0, and the sweep +
+    # drain-on-recovery re-attempt it exactly as they would a FAILED row.
     if not force and ServiceHealthState.is_down(BREVO_SERVICE):
-        notification.status = NotificationStatus.FAILED
+        notification.status = NotificationStatus.DEFERRED
         notification.error_message = "Deferred: Brevo is currently unavailable."
         notification.save(update_fields=["status", "error_message", "updated_at"])
         logger.info(
@@ -71,156 +98,186 @@ def send_notification_task(self, notification_id: str, force: bool = False) -> N
         )
         return
 
-    success = send_now(notification)
+    if send_now(notification):
+        return
 
-    if not success:
-        # During a known outage, skip the fast retry storm — the hourly sweep +
-        # drain re-deliver on a calm cadence once Brevo is back.
-        if ServiceHealthState.is_down(BREVO_SERVICE):
-            return
+    # send_now() already recorded FAILED, the error, and the attempt (unless the
+    # send failed as part of a known outage, which deliberately spends no
+    # attempt). During a known outage there is nothing more to decide — the
+    # sweep keeps re-trying on a calm cadence once Brevo is back.
+    if ServiceHealthState.is_down(BREVO_SERVICE):
+        return
 
-        retry_number = self.request.retries          # 0-indexed
-        attempts_so_far = retry_number + 1
-
-        if attempts_so_far < MAX_ATTEMPTS:
-            logger.warning(
-                "notification send failed, retrying in %ss (attempt %s/%s)",
-                RETRY_DELAY_SECONDS, attempts_so_far, MAX_ATTEMPTS,
-                extra={"notification_id": notification_id},
-            )
-            raise self.retry(countdown=RETRY_DELAY_SECONDS)
-
-        # Budget spent — stop for good. ABANDONED is terminal, so the hourly
-        # sweep (which only scans FAILED) will never pick this row up again.
-        notification.refresh_from_db(fields=["attempt_count"])
+    if notification.attempt_count >= MAX_ATTEMPTS:
+        # Budget spent — stop for good. ABANDONED is terminal, so the sweep will
+        # never pick this row up again.
         notification.status = NotificationStatus.ABANDONED
-        notification.save(update_fields=["status", "updated_at"])
+        fields = ["status", "updated_at"]
+        # Terminal, so nothing will ever re-read `context` — and an abandoned
+        # credentials email is precisely the row that used to keep a plaintext
+        # temporary password forever, since the weekly cleanup only touched SENT.
+        if notification.template_name in AUTH_SECRET_TEMPLATES:
+            notification.context = dict(REDACTED_CONTEXT)
+            fields.append("context")
+        notification.save(update_fields=fields)
         logger.error(
             "notification abandoned after %s attempts — no further retries",
             MAX_ATTEMPTS,
             extra={"notification_id": notification_id},
         )
+    else:
+        logger.warning(
+            "notification send failed (attempt %s/%s) — the retry sweep will re-drive it",
+            notification.attempt_count, MAX_ATTEMPTS,
+            extra={"notification_id": notification_id},
+        )
 
 
-@shared_task(name="notifications.retry_failed")
+@background_task(name="notifications.retry_failed")
 def retry_failed_notifications_task() -> None:
     """
-    Hourly sweep: re-queue FAILED notifications that still have attempts left.
+    The recovery sweep. Runs from cron group `notification_retry`, and is the
+    ONLY retry path — there is no in-task retry any more (see
+    send_notification_task).
+
+    It re-drives three populations:
+
+    **FAILED** — a send that was genuinely attempted and failed.
+
+    **DEFERRED** — a send that was never attempted because the Brevo breaker was
+    open when its turn came. Handled identically to FAILED here; the distinction
+    exists so the admin doesn't call it a failure.
+
+    **Stranded QUEUED** — a row created more than STRANDED_AFTER ago whose
+    in-process dispatch never ran. Under Celery this barely mattered: the broker
+    held the message, so a worker restart redelivered it. With no broker this is
+    the *primary* loss mode —
+
+        queue_notification()  ->  Notification.objects.create(status=QUEUED)  [committed]
+                              ->  on_commit -> pool.submit(...)
+                              ->  [deploy SIGTERM / OOM / instance restart]
+
+    — and without this pass that row would sit QUEUED forever, with nothing
+    looking at it. Note the hole existed before the migration too, for any row
+    created while the worker was down; it was simply much narrower.
 
     Two hard stops, so nothing is retried forever:
       * `attempt_count >= MAX_ATTEMPTS` — the budget is spent (the row is marked
         ABANDONED by send_notification_task at that point).
       * older than GIVE_UP_AFTER_DAYS — covers the one case the attempt budget
         can't: a row parked by the Brevo-outage path never spends an attempt, so
-        without an age ceiling it would be re-queued every hour indefinitely if
-        Brevo never recovered. Those are marked ABANDONED here.
+        without an age ceiling it would be re-queued forever if Brevo never
+        recovered. Those are marked ABANDONED here.
 
-    Skips per-type: a FAILED row whose template_name is currently disabled
+    Skips per-type: a row whose template_name is currently disabled
     (NotificationTypeSettings) is left alone rather than resent — bypassing
     queue_notification here means this sweep must apply that gate itself.
     """
-    from apps.notifications.models import Notification, NotificationStatus, NotificationTypeSettings, ScheduledTaskSettings
+    from django.db.models import Case, IntegerField, Q, When
+
+    from apps.notifications.models import (
+        Notification,
+        NotificationStatus,
+        NotificationTypeSettings,
+        ScheduledTaskSettings,
+    )
+    from apps.notifications.services import scrub_auth_context, sweep_in_progress
 
     if not ScheduledTaskSettings.is_task_enabled("notifications_retry_failed"):
         return
 
-    failed = Notification.objects.filter(status=NotificationStatus.FAILED)
-    cutoff = timezone.now() - timedelta(days=GIVE_UP_AFTER_DAYS)
+    now = timezone.now()
+    cutoff = now - timedelta(days=GIVE_UP_AFTER_DAYS)
 
-    # Stop chasing anything past the give-up window, whatever its attempt count.
-    stale = failed.filter(created_at__lt=cutoff)
-    given_up = stale.update(status=NotificationStatus.ABANDONED)
+    # A QUEUED row only counts as stranded once its dispatch has had time to run.
+    # Without the age floor this sweep would race the pool and re-drive a send
+    # that is in flight right now, double-mailing the recipient.
+    retryable = Q(status__in=RETRYABLE_STATUSES) | Q(
+        status=NotificationStatus.QUEUED, created_at__lt=now - STRANDED_AFTER
+    )
+
+    # Stop chasing anything past the give-up window, whatever its attempt count
+    # or status. A QUEUED row this old is stranded *and* stale — the reminder it
+    # describes is a week out of date.
+    giving_up = Notification.objects.filter(retryable, created_at__lt=cutoff)
+    # Scrub before the status flips: once these are ABANDONED they are terminal
+    # and nothing re-reads `context`, but the filter below matches on status, so
+    # do it while it still selects them.
+    scrub_auth_context(giving_up)
+    given_up = giving_up.update(status=NotificationStatus.ABANDONED)
     if given_up:
         logger.warning(
             "abandoned %s notification(s) still undelivered after %s days",
             given_up, GIVE_UP_AFTER_DAYS,
         )
 
-    candidates = failed.filter(attempt_count__lt=MAX_ATTEMPTS, created_at__gte=cutoff)
-    for notification in candidates:
-        if NotificationTypeSettings.is_enabled(notification.template_name):
-            # force=True: the sweep genuinely re-attempts even while the breaker
-            # is open, so it both drains the backlog and detects Brevo recovery.
-            send_notification_task.delay(str(notification.id), force=True)
+    candidates = (
+        Notification.objects.filter(
+            retryable, attempt_count__lt=MAX_ATTEMPTS, created_at__gte=cutoff
+        )
+        # Auth mail first. Everything here is re-driven in one pass anyway, but
+        # this pass runs inline in a cron process with a finite lifetime — if it
+        # is killed part-way through, the thing that survived being dropped
+        # should be the digest, not the reset code that expires in 30 minutes.
+        .annotate(
+            priority=Case(
+                *[
+                    When(template_name=name, then=rank)
+                    for rank, name in enumerate(PRIORITY_TEMPLATES)
+                ],
+                default=len(PRIORITY_TEMPLATES),
+                output_field=IntegerField(),
+            )
+        )
+        .order_by("priority", "created_at")
+    )
+
+    # sweep_in_progress: the forced sends below can be what detects Brevo coming
+    # back, and that transition calls _drain_after_recovery — which is this same
+    # sweep. This cycle IS the drain, so suppress the re-entry.
+    with sweep_in_progress():
+        for notification in candidates:
+            if NotificationTypeSettings.is_enabled(notification.template_name):
+                # force=True: the sweep genuinely re-attempts even while the
+                # breaker is open, so it both drains the backlog and detects
+                # Brevo recovery. This runs inline — async dispatch is opt-in and
+                # a cron process never opts in — so the sweep sends its own mail
+                # before exiting rather than handing it to a pool that dies with
+                # the command.
+                send_notification_task.delay(str(notification.id), force=True)
 
 
-@shared_task(name="notifications.cleanup_old")
+@background_task(name="notifications.cleanup_old")
 def cleanup_old_notifications_task() -> None:
-    """Weekly purge: delete sent notifications older than 90 days."""
+    """
+    Weekly purge of terminal notifications older than 90 days.
+
+    Covers SENT *and* ABANDONED. Only SENT used to be purged, which meant the
+    rows most likely to hold a stack trace in `error_message` — and, before the
+    scrub in services.send_now, a plaintext temporary password in `context` —
+    were the ones kept forever.
+
+    FAILED and DEFERRED are deliberately left alone: the retry sweep still owns
+    those, and it converts anything past the give-up window to ABANDONED, so a
+    genuinely dead row always ends up in this net within a week.
+    """
     from apps.notifications.models import Notification, NotificationStatus, ScheduledTaskSettings
 
     if not ScheduledTaskSettings.is_task_enabled("notifications_cleanup_old"):
         return
 
     cutoff = timezone.now() - timedelta(days=90)
-    Notification.objects.filter(status=NotificationStatus.SENT, sent_at__lt=cutoff).delete()
 
+    sent, _ = Notification.objects.filter(
+        status=NotificationStatus.SENT, sent_at__lt=cutoff
+    ).delete()
+    # ABANDONED rows may never have a sent_at, so age them off created_at.
+    abandoned, _ = Notification.objects.filter(
+        status=NotificationStatus.ABANDONED, created_at__lt=cutoff
+    ).delete()
 
-def _check_brevo_reachable() -> tuple[bool, str]:
-    """Is Brevo's transactional API reachable right now? Returns (ok, detail).
-
-    Primary signal is the account endpoint — the same host/auth real sends use.
-    A 401/403 means our key/account is the problem, NOT a Brevo outage, so we
-    report reachable to avoid false-alarming on a misconfigured key. On a
-    connection/5xx failure we corroborate with Brevo's public status page and
-    fold its indicator into the detail for a richer alert.
-    """
-    import requests
-    from django.conf import settings
-    from apps.notifications.services import BREVO_REQUEST_TIMEOUT
-
-    try:
-        resp = requests.get(
-            "https://api.brevo.com/v3/account",
-            headers={"api-key": settings.BREVO_API_KEY, "accept": "application/json"},
-            timeout=BREVO_REQUEST_TIMEOUT,
+    if sent or abandoned:
+        logger.info(
+            "purged old notifications",
+            extra={"event": "notifications_purged", "sent": sent, "abandoned": abandoned},
         )
-    except requests.RequestException as exc:
-        return False, f"account endpoint unreachable: {exc}{_status_page_note()}"
-
-    if resp.status_code == 200:
-        return True, "account endpoint 200"
-    if resp.status_code in (401, 403):
-        return True, f"reachable (auth {resp.status_code} — key/account issue, not an outage)"
-    return False, f"account endpoint HTTP {resp.status_code}{_status_page_note()}"
-
-
-def _status_page_note() -> str:
-    """Best-effort read of status.brevo.com's overall indicator, for context in
-    the alert. Never raises — a status-page failure must not change the verdict."""
-    import requests
-    try:
-        r = requests.get("https://status.brevo.com/api/v2/status.json", timeout=5)
-        indicator = r.json().get("status", {}).get("indicator", "unknown")
-        return f"; statuspage indicator={indicator}"
-    except Exception:
-        return "; statuspage unavailable"
-
-
-@shared_task(name="notifications.brevo_health_probe")
-def brevo_health_probe_task() -> None:
-    """Active Brevo reachability probe (beat schedule, ~every 5 min) — catches an
-    outage before an email is even sent. Admin-gated via ScheduledTaskSettings;
-    its schedule is an admin-editable PeriodicTask (see seed_periodic_tasks)."""
-    from apps.notifications.models import ScheduledTaskSettings, ServiceHealthState
-    from apps.notifications.services import (
-        BREVO_SERVICE,
-        _drain_after_recovery,
-        _emit_brevo_outage,
-        _emit_brevo_recovered,
-    )
-
-    if not ScheduledTaskSettings.is_task_enabled("notifications_brevo_health_probe"):
-        return
-
-    reachable, detail = _check_brevo_reachable()
-
-    if reachable:
-        if ServiceHealthState.record_success(BREVO_SERVICE):  # down -> up transition
-            _emit_brevo_recovered()
-            _drain_after_recovery()
-    else:
-        # The probe is a deliberate health check — react after 2 consecutive
-        # misses (vs the passive path's 3), but still absorb a one-off blip.
-        if ServiceHealthState.record_failure(BREVO_SERVICE, detail, threshold=2):
-            _emit_brevo_outage({"source": "probe", "detail": detail})

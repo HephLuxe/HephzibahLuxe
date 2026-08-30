@@ -1,5 +1,7 @@
 import uuid
+
 from django.db import models
+
 from apps.core.models import AttributedModel
 from apps.core.storages import select_public_media_storage
 from apps.core.utils import contact_photo_upload_path

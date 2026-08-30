@@ -10,10 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
-from pathlib import Path
-from datetime import timedelta
 import os
 import sys
+from datetime import timedelta
+from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 import environ
 from django.core.exceptions import ImproperlyConfigured
 
@@ -39,8 +41,8 @@ DEBUG = env("DEBUG")
 
 # Comma-separated hostnames this deploy serves (env-driven). Empty is fine in
 # dev because DEBUG=True bypasses the host check; REQUIRED once DEBUG is False,
-# or Django rejects every request with DisallowedHost. On Railway set e.g.
-# ALLOWED_HOSTS=hephzibah-api.up.railway.app,api.hephluxe.com
+# or Django rejects every request with DisallowedHost. On Render set e.g.
+# ALLOWED_HOSTS=hephzibah-luxe-api.onrender.com,api.hephluxe.com
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
 
 # Origins trusted for unsafe (POST) requests behind HTTPS — the Django admin
@@ -68,7 +70,6 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
     'storages',
-    'django_celery_beat',
 
     'apps.accounts',
     'apps.core',
@@ -85,6 +86,9 @@ INSTALLED_APPS = [
     'apps.notifications',
 ]
 
+# Every rate-limiting and throttling NUMBER in the project is declared in one
+# block near the bottom of this file — see "Rate limiting: every number, one
+# place". THROTTLE_RATES is defined there; REST_FRAMEWORK only points at it.
 REST_FRAMEWORK = {
         'DEFAULT_AUTHENTICATION_CLASSES': (
             'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -92,14 +96,18 @@ REST_FRAMEWORK = {
     # Unhandled exceptions get the standard {detail, code} envelope + logging.
     # DRF-handled 4xx responses pass through unchanged (see apps/core/exceptions.py).
     'EXCEPTION_HANDLER': 'apps.core.exceptions.custom_exception_handler',
+    # Project subclasses, NOT DRF's stock classes. DRF's own get_ident uses the
+    # whole X-Forwarded-For string as the bucket identity, which is spoofable
+    # with one header; these take their identity from apps.core.ratelimit so
+    # there is exactly one answer to "who is the client". See
+    # apps/core/throttling.py and docs/RATE_LIMITING_AUDIT.md (D3–D5).
     'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle',
+        'apps.core.throttling.ClientIPAnonRateThrottle',
+        'apps.core.throttling.UserBurstRateThrottle',
     ],
-    'DEFAULT_THROTTLE_RATES': {
-        'anon': '50/day',    # Unauthenticated (login attempts, etc.)
-        'user': '500/day',   # Authenticated users
-    },
+    # DEFAULT_THROTTLE_RATES is assigned further down, right after
+    # THROTTLE_RATES is declared — every limit number lives in one block and
+    # that block has to come after TESTING is known.
 }
 
 MIDDLEWARE = [
@@ -110,7 +118,7 @@ MIDDLEWARE = [
     # SecurityMiddleware per WhiteNoise's docs. A no-op under `runserver` in dev,
     # which serves static via staticfiles finders instead.
     'whitenoise.middleware.WhiteNoiseMiddleware',
-    # Correlation ID for every request, propagated into logs + Celery tasks.
+    # Correlation ID for every request, propagated into logs + background threads.
     'apps.core.middleware.RequestIDMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -151,6 +159,30 @@ DATABASES = {
     'default': env.db('DATABASE_URL')
 }
 
+# Neon's POOLED endpoint (the `-pooler` host in DATABASE_URL) runs PgBouncer in
+# transaction-pooling mode, where a connection is handed back to the pool between
+# statements — so a server-side cursor cannot survive to be fetched from, and
+# QuerySet.iterator() fails with "cursor does not exist".
+#
+# Pinned rather than left to Django's default (False) because the failure is
+# environment-split and therefore invisible in review: the test suite runs
+# against the DIRECT endpoint, where .iterator() works fine, so a bulk sweep
+# using it would pass CI and break only in production. Bulk sweeps are exactly
+# what this project has (cleanup_orphaned_documents, the notification purge).
+DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
+
+# Close the connection at the end of each request so Neon's compute can
+# autosuspend (~5 min idle) — idle compute is billed, and autosuspend is the
+# whole reason Celery's beat was removed (docs/adr/0001-remove-celery.md).
+#
+# 0 is already Django's default, so this line changes no behaviour. It is written
+# down because three separate places treat it as a load-bearing decision — the
+# ADR, RUNBOOK's "is anything keeping the DB compute awake?" table, and the
+# connections.close_all() in apps/core/background.py that exists to uphold it —
+# and until now none of them pointed at any actual setting. Do NOT raise it: a
+# persistent connection keeps the compute awake and burns the quota.
+DATABASES['default']['CONN_MAX_AGE'] = 0
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -178,6 +210,27 @@ LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'UTC'
 
+# The calendar timezone assumed for an account that hasn't set one of its own
+# (accounts.User.timezone). NOT the same knob as TIME_ZONE above: that one governs
+# how *instants* are stored and rendered and must stay UTC. This one answers "what
+# day is it for this client?", which is what the daily digests need when they
+# compare against a naive DateField like PaymentMilestone.due_date. See
+# apps/core/timezones.py for why a per-recipient date matters on a platform used
+# worldwide, and why this is only the fallback.
+#
+# Any IANA name (`Africa/Lagos`, `America/New_York`, ...). Validated at boot: a
+# typo here would otherwise degrade silently to UTC for every account at once.
+PLATFORM_DEFAULT_TIMEZONE = env('PLATFORM_DEFAULT_TIMEZONE', default='UTC')
+try:
+    ZoneInfo(PLATFORM_DEFAULT_TIMEZONE)
+except (ZoneInfoNotFoundError, ValueError) as exc:
+    raise ImproperlyConfigured(
+        f"PLATFORM_DEFAULT_TIMEZONE={PLATFORM_DEFAULT_TIMEZONE!r} is not a known IANA "
+        "timezone (e.g. 'UTC', 'Africa/Lagos', 'America/New_York'). Every client "
+        "without a timezone of their own inherits this, so a typo would shift the "
+        "payment-due and meeting-prep digests for all of them at once."
+    ) from exc
+
 USE_I18N = True
 
 USE_TZ = True
@@ -199,7 +252,7 @@ MEDIA_URL = '/media/'
 
 
 # ── Production hardening (only when DEBUG is off) ──
-# Railway/Render terminate TLS at their edge and forward the request over plain
+# Render terminates TLS at its edge and forwards the request over plain
 # HTTP with X-Forwarded-Proto; Django must trust that header to know the origin
 # request was HTTPS — otherwise secure-cookie and HTTPS detection break behind
 # the proxy. Kept out of dev so local http://localhost keeps working.
@@ -213,7 +266,7 @@ if not DEBUG:
 
     # HSTS — instruct browsers to only ever reach this domain over HTTPS. Unlike
     # SECURE_SSL_REDIRECT this is a response header, so it can't fight a plain-HTTP
-    # healthcheck; it's safe behind Railway's always-HTTPS edge. Env-tunable so a
+    # healthcheck; it's safe behind Render's always-HTTPS edge. Env-tunable so a
     # first deploy can start conservative and ramp up once HTTPS is confirmed end
     # to end — set SECURE_HSTS_SECONDS=31536000 (1 year) before submitting to the
     # browser preload list; 0 disables. A positive value also clears Django's
@@ -291,7 +344,21 @@ else:
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
+    # Deliberately short. An ACCESS token cannot be revoked — only refresh
+    # tokens are blacklisted on rotation (BLACKLIST_AFTER_ROTATION below) — so
+    # its lifetime is exactly how long a leaked one keeps working, with no way to
+    # cut it off. At the previous `days=1` that was a full 24 hours during which
+    # deactivating the account (set_user_status) changed nothing. One hour keeps
+    # the window short while staying long enough that a normal working session
+    # refreshes only a handful of times; token_refresh is limited at 30/m per IP,
+    # which is ample headroom for that.
+    #
+    # REQUIRES the frontend to refresh on 401 and retry. If it treats a 401 as
+    # "logged out", users will be signed out hourly.
+    #
+    # Kept as literal timedeltas here rather than env vars: session policy is a
+    # code decision, not a per-deploy knob.
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
@@ -346,6 +413,26 @@ AUTH_USER_MODEL = "accounts.User"
 
 # Required, deliberately: an unusable email pipeline should fail loudly at
 # boot, not silently on the first send — same reasoning as FRONTEND_BASE_URL.
+#
+# ── Why the template IDs below have NO defaults, unlike RATE_LIMITS ──────────
+# The rate-limit numbers live in this file with an env override, because they are
+# a POLICY DECISION and the same value is correct in every environment.
+#
+# A Brevo template ID is the opposite: it is an ACCOUNT-SCOPED IDENTIFIER.
+# Template 12 in a sandbox account is a different template in the production
+# account. There is no value that is correct everywhere, so there is no honest
+# default — and a default here would be actively dangerous, because it converts
+# the failure mode from
+#     "the app refuses to boot until you set it"           (loud, safe)
+# into
+#     "the app boots and sends the WRONG email"            (silent, live)
+# on any deploy where the variable was forgotten.
+#
+# The readability these would buy already exists: notifications.services
+# .TEMPLATE_ID_MAP lists all thirteen in one place, by name.
+#
+# The rule: values that DIFFER per environment stay in env; values that are the
+# SAME everywhere live in code.
 BREVO_API_KEY = env('BREVO_API_KEY')
 if not BREVO_API_KEY.strip():
     raise ImproperlyConfigured(
@@ -353,6 +440,77 @@ if not BREVO_API_KEY.strip():
         "payment/meeting digests, phase updates, credentials, password "
         "resets, ...) goes through Brevo's API. See apps/notifications/services.py."
     )
+
+# Sender identity and Reply-To applied to EVERY transactional send. Both are
+# OPTIONAL, and blank (the default) means "use whatever the Brevo template is
+# configured with" — which is how this project worked before these existed, so
+# an unset deploy behaves exactly as it did.
+#
+# They exist so the sending identity is a deploy-time variable rather than
+# dashboard state spread across thirteen templates. Changing who the platform
+# mails as was previously thirteen manual edits with no way to review, diff or
+# roll back the change, and no way to make staging send as something other than
+# production. Set here, it is one env var and a redeploy.
+#
+# Brevo treats a per-send `sender`/`replyTo` as an override of the template's
+# own, so this wins wherever it is set and defers wherever it is not.
+BREVO_SENDER_EMAIL = env('BREVO_SENDER_EMAIL', default='').strip()
+BREVO_SENDER_NAME = env('BREVO_SENDER_NAME', default='').strip()
+BREVO_REPLY_TO_EMAIL = env('BREVO_REPLY_TO_EMAIL', default='').strip()
+
+# Per-template overrides of the three defaults above, keyed by the
+# notifications.NotificationType VALUE — deliberately not by the numeric Brevo
+# template id. Those ids are account-scoped (id 12 in a sandbox account is a
+# different template in production, as the template block below says), so keying
+# on them would make this dict environment-specific and silently wrong the first
+# time it was copied between deploys. The type value is stable everywhere.
+#
+# An entry overrides the IDENTITY, not individual fields: give an entry an email
+# and that entry's name travels with it — blank meaning "no display name" —
+# rather than inheriting BREVO_SENDER_NAME. Falling back field-by-field would
+# produce "Client Support <alerts@...>", which is precisely the mismatch this
+# exists to prevent. reply_to does fall back on its own, because where replies
+# go is a separate question from who the mail is from.
+#
+# Only inquiry_submitted_internal is declared, because it is the one template
+# that is not client-facing — it alerts staff about a new lead, so a
+# client-support From reads wrong on it. Adding another is copying the block.
+BREVO_SENDER_OVERRIDES = {
+    'inquiry_submitted_internal': {
+        'email': env('BREVO_SENDER_EMAIL_INQUIRY_INTERNAL', default='').strip(),
+        'name': env('BREVO_SENDER_NAME_INQUIRY_INTERNAL', default='').strip(),
+        'reply_to': env('BREVO_REPLY_TO_EMAIL_INQUIRY_INTERNAL', default='').strip(),
+    },
+}
+
+# Validated at BOOT, not at send time. A typo'd address here would otherwise
+# surface as a Brevo API error on the first real email — which for this project
+# means a client silently not receiving their credentials or password reset,
+# discovered from a FAILED notification row hours later.
+_BREVO_IDENTITIES = [
+    ('BREVO_SENDER_EMAIL', BREVO_SENDER_EMAIL, BREVO_SENDER_NAME, BREVO_REPLY_TO_EMAIL),
+] + [
+    (f"BREVO_SENDER_OVERRIDES['{_template}']", _o['email'], _o['name'], _o['reply_to'])
+    for _template, _o in BREVO_SENDER_OVERRIDES.items()
+]
+
+for _label, _email, _name, _reply_to in _BREVO_IDENTITIES:
+    for _field, _value in (('sender', _email), ('reply-to', _reply_to)):
+        if _value and '@' not in _value:
+            raise ImproperlyConfigured(
+                f"{_label} has a {_field} address of {_value!r}, which is not an "
+                "email address. Leave it blank to fall back to the default "
+                "identity, or to the Brevo template's own sender."
+            )
+
+    # A name with no address is silently dropped by Brevo — the fallback sender
+    # would be used and the configured name would never appear anywhere. Fail
+    # instead: this is exactly the misconfiguration that looks like it worked.
+    if _name and not _email:
+        raise ImproperlyConfigured(
+            f"{_label} sets a sender name with no sender address. Brevo needs the "
+            "address to apply the name, so the name would be ignored entirely."
+        )
 
 # One Brevo template ID per notifications.NotificationType — build the
 # matching template in the Brevo dashboard first, then set its numeric ID
@@ -369,70 +527,87 @@ BREVO_TEMPLATE_RECEIPT_ISSUED = env.int('BREVO_TEMPLATE_RECEIPT_ISSUED')
 BREVO_TEMPLATE_MILESTONE_PAID = env.int('BREVO_TEMPLATE_MILESTONE_PAID')
 BREVO_TEMPLATE_USER_CREDENTIALS = env.int('BREVO_TEMPLATE_USER_CREDENTIALS')
 BREVO_TEMPLATE_PASSWORD_RESET = env.int('BREVO_TEMPLATE_PASSWORD_RESET')
+BREVO_TEMPLATE_INQUIRY_RECEIVED = env.int('BREVO_TEMPLATE_INQUIRY_RECEIVED')
+BREVO_TEMPLATE_INQUIRY_SUBMITTED_INTERNAL = env.int('BREVO_TEMPLATE_INQUIRY_SUBMITTED_INTERNAL')
 
-# Single Redis source of truth. Celery's broker + result backend and the Django
-# cache (rate-limit counters, /health/ready) all derive from REDIS_URL, so one
-# URL wires everything — the home server hands out one Redis with a per-project
-# DB index. The explicit CELERY_* / CACHE_REDIS_URL vars still override if you
-# want them on a different instance or DB index.
-REDIS_URL = env('REDIS_URL', default='')
-CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='') or REDIS_URL
-CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default='') or REDIS_URL
-if not CELERY_BROKER_URL:
-    raise ImproperlyConfigured(
-        "Set REDIS_URL (or CELERY_BROKER_URL) — Celery needs a Redis broker, "
-        "e.g. redis://192.168.2.21:6379/4."
-    )
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = 'UTC'
+# Google reCAPTCHA **v3** secret. OPTIONAL: while this is blank, verification is
+# skipped entirely (apps/inquiries/recaptcha.py), so local dev, CI and tests need
+# no config and boot is never blocked.
+#
+# ONE key pair is intended to cover every public form on the domain — that is how
+# v3 is designed to be used, because its score model calibrates on the traffic it
+# sees and splitting a small site across two keys leaves both models with less to
+# learn from. What keeps that safe is the per-action check in recaptcha.py, NOT
+# key separation: without it a token minted on the inquiry page is replayable
+# against any other endpoint sharing the key.
+RECAPTCHA_SECRET_KEY = env('RECAPTCHA_SECRET_KEY', default='')
 
-# ── Keep Redis chatter (and Railway Redis load) low ──
-# Every task here is fire-and-forget (notifications, digests) — nothing calls
-# .get()/AsyncResult or uses chords/groups — so storing a per-task result just
-# burns Redis writes for data no one reads. And a Redis-broker worker's biggest
-# source of *idle* command volume is its background broadcast traffic
-# (gossip/mingle/heartbeat) plus the remote-control mailbox — none of which this
-# single-worker deployment needs. Turning them off keeps Redis near-silent when
-# there's no work, while normal task delivery (a blocking BRPOP) is unaffected.
-# The matching worker flags (--without-gossip/mingle/heartbeat) are in the Procfile.
-CELERY_TASK_IGNORE_RESULT = True
-CELERY_WORKER_ENABLE_REMOTE_CONTROL = False
-CELERY_WORKER_SEND_TASK_EVENTS = False
-# Reconnect instead of crashing if a worker/beat boots a moment before Redis is
-# reachable on Railway (also silences a Celery 6 deprecation warning).
-CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
-# visibility_timeout must stay well above our longest countdown — the
-# event-details debounce (PortalSettings.event_details_notify_debounce_seconds,
-# default 900s) — so a delayed task is never redelivered before it fires.
-CELERY_BROKER_TRANSPORT_OPTIONS = {'visibility_timeout': 3600}
+# Minimum v3 score (0.0 bot … 1.0 human) an action must clear, keyed by the
+# action name the frontend passes to grecaptcha.execute(). Same shape and reason
+# as RATE_LIMITS below: every number that is a policy decision lives in this file
+# with an env override, so a threshold can be retuned on a running deploy.
+#
+# Per-action rather than global because the cost of a false reject differs by
+# endpoint. 0.5 is Google's suggested starting point and is a PLACEHOLDER — the
+# reCAPTCHA console plots the real score distribution for this site, and the
+# threshold should be set from that after watching live traffic. Lead capture is
+# the one to err low on: a wrongly rejected inquiry is a lead the business never
+# learns it had.
+RECAPTCHA_MIN_SCORES = {
+    'submit_inquiry': env.float('RECAPTCHA_MIN_SCORE_SUBMIT_INQUIRY', default=0.5),
+}
 
-# Under pytest or `manage.py test`, run tasks synchronously instead of via
-# .delay(). Several services (reminders.services.create_reminder, the
-# document_hub/meetings digest tasks) queue a notification as a side effect;
-# without this, .delay() tries to reach the real Redis broker, and if nothing
-# is listening there (true whenever Redis isn't running locally) the call
-# hangs indefinitely rather than failing fast — discovered when a test run
-# against apps/reminders/tests.py hung with zero output for 8+ minutes.
-# conftest.py sets the same flag directly on the Celery app for pytest; this
-# settings-level check additionally covers `manage.py test`, which never
-# loads conftest.py.
+# Applied to any action with no entry above, so a new caller that forgets to
+# register one is still scored rather than waved through.
+RECAPTCHA_MIN_SCORE_DEFAULT = env.float('RECAPTCHA_MIN_SCORE_DEFAULT', default=0.5)
+
+# ---------------------------------------------------------------------------
+# Background work — in-process thread pool, no broker
+# ---------------------------------------------------------------------------
+# There is no Celery, no worker service, no beat service and no broker. Deferred
+# work runs in a bounded thread pool inside the web process (apps/core/background)
+# and every task that can be lost is re-driven by a cron sweep
+# (`manage.py run_scheduled <group>`). See docs/adr/0001-remove-celery.md for the
+# measurements and the rejected alternatives.
+#
+# Redis is still here — it is the Django cache and the rate-limit store
+# (CACHE_REDIS_URL, further down). What is gone is REDIS_URL, which existed only
+# to be a Celery broker.
+BACKGROUND_MAX_WORKERS = env.int('BACKGROUND_MAX_WORKERS', default=4)
+# Ceiling on jobs queued-or-running before dispatch degrades to running inline in
+# the calling thread. Slower, never lossy — the alternative is dropping mail.
+BACKGROUND_MAX_QUEUED = env.int('BACKGROUND_MAX_QUEUED', default=100)
+# Force every .delay() inline even inside the web process. Off in production;
+# forced on under the test runner below. Useful locally to debug a task
+# synchronously in the request that triggered it.
+BACKGROUND_EAGER = env.bool('BACKGROUND_EAGER', default=False)
+
+# Under pytest or `manage.py test`, run deferred work synchronously. Several
+# services (reminders.services.create_reminder, the document_hub/meetings digest
+# tasks) queue a notification as a side effect, and a test asserting on the
+# resulting Notification row needs it to have happened before the assertion.
+# Replaces the old CELERY_TASK_ALWAYS_EAGER. Belt and braces: apps/core/background
+# also runs inline in any process that has not called enable_async(), and only
+# config/wsgi.py calls it — so this flag only matters for a test client that boots
+# through wsgi.py (WSGI_APPLICATION, which is also the path `runserver` takes).
 TESTING = 'pytest' in sys.modules or (len(sys.argv) > 1 and sys.argv[1] == 'test')
 if TESTING:
-    CELERY_TASK_ALWAYS_EAGER = True
-    CELERY_TASK_EAGER_PROPAGATES = True
-
-# DB-backed schedule via django-celery-beat (DatabaseScheduler), so the timing
-# of every periodic task is editable from the Django admin (Periodic Tasks) with
-# no redeploy — and, critically, so it matches the home-server `celerybeat@`
-# systemd unit, which hardcodes `--scheduler
-# django_celery_beat.schedulers:DatabaseScheduler`. A static CELERY_BEAT_SCHEDULE
-# would be silently ignored under that scheduler, stranding every periodic task.
-# The default schedule (the four existing jobs + the Brevo health probe) is
-# installed by the idempotent `manage.py seed_periodic_tasks` command; run it
-# once per environment after `migrate`.
-CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+    BACKGROUND_EAGER = True
+    # Throttling off under the test runner, the same way RATELIMIT_ENABLE is
+    # below. Without this the DRF throttles stayed live at 50/day while
+    # django-ratelimit was disabled, so any test class making enough anonymous
+    # requests without clearing the cache started getting 429s from a limiter it
+    # never opted into — order-dependent flakiness.
+    #
+    # Done by nulling the RATES, not by unwiring DEFAULT_THROTTLE_CLASSES. A
+    # None rate makes SimpleRateThrottle.allow_request return True immediately,
+    # so nothing is counted — but every view keeps its real throttle_classes, so
+    # a test can still assert which ceilings an endpoint carries (and that
+    # submit_inquiry carries none). Emptying the class list would have made that
+    # assertion vacuously true for every endpoint in the project.
+    #
+    # The nulling itself happens where DEFAULT_THROTTLE_RATES is assigned, in the
+    # rate-limiting block below, so the whole decision is readable in one place.
 
 CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS')
 
@@ -471,14 +646,14 @@ FRONTEND_BASE_URL = FRONTEND_BASE_URL.strip()
 
 
 # ---------------------------------------------------------------------------
-# Cache — its own Redis (django-redis), separate from Celery; LocMem fallback
+# Cache — Redis (django-redis), with a LocMem fallback
 # ---------------------------------------------------------------------------
-# Distinct from REDIS_URL (Celery) on purpose — this is the data cache: it backs
-# rate-limit counters and fast data caching, and should live on its own Redis DB
-# index so cache operations never touch the Celery broker/queue (same split the
-# storefront uses). On the home server the control panel allocates a dedicated
-# cache index (e.g. redis://192.168.2.21:6379/5). Leave blank in dev to fall back
-# to in-process LocMem. /health/ready/ checks whichever is active.
+# This is Redis' entire job now that the Celery broker is gone: the data cache,
+# backing rate-limit counters, the inquiry double-submit dedupe window and
+# /health/ready/. It still wants its own Redis DB index, separate from anything
+# else sharing the instance. On the home server the control panel allocates a
+# dedicated cache index (e.g. redis://192.168.2.21:6379/5). Leave blank in dev to
+# fall back to in-process LocMem. /health/ready/ checks whichever is active.
 CACHE_REDIS_URL = env('CACHE_REDIS_URL', default='').strip()
 # Force LocMem under the test runner regardless of CACHE_REDIS_URL, so a test's
 # cache.clear() (used to reset rate-limit counters) can never FLUSHDB a real,
@@ -497,6 +672,24 @@ else:
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
         }
     }
+    # LocMem is per-PROCESS, and the Procfile runs `gunicorn --workers 3`. Every
+    # rate limit and the inquiry dedupe window count in this cache, so on a real
+    # deploy without Redis each limit is silently 3x its declared value and the
+    # dedupe window misses two clicks out of three. Nothing surfaces that: the
+    # app boots, the endpoints answer, and the numbers are simply wrong. Fail at
+    # boot instead — same reasoning as BREVO_API_KEY and FRONTEND_BASE_URL above.
+    #
+    # Deliberately NOT applied to RECAPTCHA_SECRET_KEY: that one is designed to
+    # skip verification silently when unset and the app must start either way.
+    if not DEBUG and not TESTING:
+        raise ImproperlyConfigured(
+            "CACHE_REDIS_URL must be set when DEBUG=False. Every rate limit and "
+            "the inquiry double-submit dedupe window count in the Django cache, "
+            "and the LocMem fallback is per-process — with `gunicorn --workers 3` "
+            "each limit becomes 3x its configured value and the dedupe window "
+            "stops working for two clicks out of three. Point it at Redis (on "
+            "its own DB index)."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -550,30 +743,260 @@ if SENTRY_DSN and not TESTING:
 
 
 # ---------------------------------------------------------------------------
-# Rate limiting (django-ratelimit)
+# Rate limiting: every number, one place
 # ---------------------------------------------------------------------------
+# THE NUMBERS LIVE HERE, not in .env. Each one is written as
+# `env("VAR", default=<the number>)`, so:
+#
+#   * the value in THIS file is the real, declared policy — read it here;
+#   * an environment variable of the same name overrides it for one deploy,
+#     which is the escape hatch for tuning without a code change.
+#
+# .env.example lists the override names COMMENTED OUT for exactly that reason:
+# an uncommented value there would be a second copy of the number and the two
+# would drift. If you change a limit permanently, change it here.
+#
 # Counters live in the `default` cache (see CACHES above). For correct
 # cross-worker counting in production, CACHE_REDIS_URL must point at Redis; with
 # the LocMem fallback each gunicorn worker keeps its own counters, so the
-# effective limit is multiplied by the worker count.
-#
+# effective limit is multiplied by the worker count. That is now a boot error
+# when DEBUG=False rather than a silent 3x — see the guard beside CACHES.
+
+
+# ── Where a 429 comes from ───────────────────────────────────────────────────
 # The middleware catches the Ratelimited exception raised by @ratelimit(block=True)
 # and renders this view — the standard {detail, code} 429. See apps/core/views.ratelimited.
 RATELIMIT_VIEW = "apps.core.views.ratelimited"
+
+# django-ratelimit's built-in `key='ip'` / `'user_or_ip'` shortcuts resolve the
+# client themselves, and by default they use bare REMOTE_ADDR — which on a PaaS
+# is the platform's private proxy address, i.e. one shared bucket for every
+# client. Nothing uses those shortcuts today (every limit passes an explicit key
+# callable), so this closes the trap before someone reaches for the shortcut
+# rather than fixing a live bug. Signature is (request), which is why
+# resolve_client_ip takes one argument.
+RATELIMIT_IP_META_KEY = "apps.core.ratelimit.resolve_client_ip"
 
 # Disabled under test so the suite isn't throttled; rate-limit tests opt back in
 # with @override_settings(RATELIMIT_ENABLE=True).
 RATELIMIT_ENABLE = not TESTING
 
-# Per-endpoint limits, "count/period" (period: s, m, h, d, or a multiple like
-# "15m"). Env-tunable per deploy; the *key* each counts against (IP vs IP+email)
-# is wired at the URL in apps/accounts/urls.py, not here. Defaults match
-# .env.example so the app boots without them (and the active value stays visible
-# there). Consumed via apps/core/ratelimit.RATE_LIMITS.
+
+# ── Per-endpoint limits (django-ratelimit) ───────────────────────────────────
+# "count/period" (period: s, m, h, d, or a multiple like "10m"). The *key* each
+# one counts against (IP / IP+email / email) is wired at the URL in
+# apps/accounts/urls.py and apps/inquiries/urls.py, not here. Consumed via
+# apps.core.ratelimit.RATE_LIMITS.
+#
+# Each key is ALSO the django-ratelimit `group=` passed at the URL, which is what
+# keeps the buckets separate: left to itself the library derives the group from
+# the view function's module + qualname, and every `as_view()` result has the
+# qualname "View.as_view.<locals>.view" — so two endpoints in one module sharing
+# a rate and a key callable silently shared one bucket. That is exactly what
+# happened to password_reset_verify and password_reset_confirm.
 RATE_LIMITS = {
-    "auth_login":              env("RATE_LIMIT_AUTH_LOGIN", default="5/m"),
+    # Login is limited on TWO axes. Per IP stops one machine grinding; per
+    # account caps attempts against one email no matter how many source
+    # addresses they come from, which is the axis an IP-only limit leaves open to
+    # a distributed credential-stuffing run.
+    #
+    # auth_login is 10/m, raised from 5/m on 2026-08-29. What that costs is
+    # almost nothing, because this tier is not what bounds an attack:
+    # auth_login_daily (100/d, same IP) is, and the tiers stack outermost-first
+    # so an inner one never counts a request an outer one refused. Raising the
+    # burst only changes how FAST one IP reaches its unchanged daily ceiling —
+    # 20 minutes at 5/m, 10 minutes at 10/m, both trivial for a script. The
+    # per-minute tier smooths; the daily tier stops.
+    #
+    # What it buys is real: one IP is not one person behind NAT, and this limit
+    # counts EVERY POST including successful ones, so a dozen staff behind one
+    # office gateway logging in correctly were spending an anti-brute-force
+    # budget. At 5/m the sixth arrival in a minute was refused. Access tokens
+    # last an hour and refresh tokens 7 days, so bunched logins are a training
+    # session or a Monday morning rather than a constant — 10 covers those.
+    #
+    # The principled version of this fix is to count only FAILED logins, which
+    # needs is_ratelimited(increment=False) at the top of the view plus an
+    # explicit increment after authentication fails. Scoped in
+    # docs/adr/0002-login-failure-tracking.md, together with the per-account
+    # daily backstop that has to land at the same time.
+    "auth_login":              env("RATE_LIMIT_AUTH_LOGIN", default="10/m"),
+    "auth_login_account":      env("RATE_LIMIT_AUTH_LOGIN_ACCOUNT", default="10/h"),
     "token_refresh":           env("RATE_LIMIT_TOKEN_REFRESH", default="30/m"),
     "password_reset_request":  env("RATE_LIMIT_PASSWORD_RESET_REQUEST", default="3/h"),
     "password_reset_verify":   env("RATE_LIMIT_PASSWORD_RESET_VERIFY", default="10/m"),
     "password_reset_confirm":  env("RATE_LIMIT_PASSWORD_RESET_CONFIRM", default="10/m"),
+
+    # ── Daily caps, one per anonymous endpoint, all keyed on the client IP ────
+    # These exist because the per-minute limits above cap a BURST and nothing
+    # else: 10/m sustained is 14,400 login attempts a day, and 10/m on the reset
+    # code is 14,400 guesses. The daily ceiling used to come from the shared DRF
+    # `anon` throttle, which counted every unauthenticated endpoint in ONE bucket
+    # per IP — so a morning of failed logins from an office could leave someone
+    # in the same building unable to complete a password reset, refused by other
+    # people's traffic. Each endpoint now carries its own day, and the shared
+    # ceiling below is demoted to a safety net.
+    #
+    # Sized for the worst legitimate case: one office or mobile-carrier gateway
+    # (NAT means one IP is not one person) with roughly a dozen staff behind it.
+    #
+    # token_refresh_daily is the loosest by a distance, and deliberately: with
+    # ACCESS_TOKEN_LIFETIME at one hour, every active session refreshes ~9 times
+    # a working day, so a dozen staff behind one address is ~110 legitimate
+    # refreshes daily. It is also the least useful endpoint to grind — rotation
+    # plus blacklisting means a stolen refresh token works exactly once.
+    "auth_login_daily":              env("RATE_LIMIT_AUTH_LOGIN_DAILY", default="100/d"),
+    # The per-ACCOUNT day. Safe to exist only because the login tiers now count
+    # FAILED attempts exclusively (apps/accounts/login_guard.py) — as a counter
+    # of all attempts it would have been a lockout weapon: anyone who knew a
+    # staff email could spend the account's day from many addresses, one attempt
+    # each, and no per-IP tier would ever fire. See ADR-0002.
+    #
+    # Its real job is the case User.failed_login_count cannot cover: an email
+    # with NO account behind it has no row to count on, so this is the only thing
+    # bounding someone hammering addresses to find which ones exist.
+    "auth_login_account_daily":      env("RATE_LIMIT_AUTH_LOGIN_ACCOUNT_DAILY", default="50/d"),
+
+    # ── The Django admin's own login ─────────────────────────────────────────
+    # /admin/login/ is NOT a DRF view and is not wrapped by the decorators in
+    # apps/accounts/urls.py, so until these existed it had no limit of any kind:
+    # unlimited password guesses against any is_staff account, and an account
+    # locked out of the API could still walk in through the admin. Since
+    # `role=admin` forces is_superuser=True in User.save(), that is the whole
+    # control plane — notifications, users, feature toggles, reference counters.
+    #
+    # Separate IP groups from auth_login so operator traffic and public API
+    # traffic never draw down each other's buckets. The ACCOUNT tiers are
+    # deliberately SHARED with the API (see login_guard.admin_login_tiers): one
+    # account under attack is one account, whichever door is being tried.
+    #
+    # Tighter than the API's per-minute tier because the admin has a handful of
+    # human users and no programmatic callers — nothing legitimate here retries.
+    "admin_login":                   env("RATE_LIMIT_ADMIN_LOGIN", default="5/m"),
+    "admin_login_daily":             env("RATE_LIMIT_ADMIN_LOGIN_DAILY", default="50/d"),
+    "token_refresh_daily":           env("RATE_LIMIT_TOKEN_REFRESH_DAILY", default="500/d"),
+    "password_reset_request_daily":  env("RATE_LIMIT_PASSWORD_RESET_REQUEST_DAILY", default="20/d"),
+    "password_reset_verify_daily":   env("RATE_LIMIT_PASSWORD_RESET_VERIFY_DAILY", default="50/d"),
+    "password_reset_confirm_daily":  env("RATE_LIMIT_PASSWORD_RESET_CONFIRM_DAILY", default="20/d"),
+    # Lead capture is also limited on two axes, and the IP one is the load-bearing
+    # half. A single "3/h per (IP, email)" limit looks strict and isn't: the email
+    # on a public form is attacker-chosen and free, so varying it buys a fresh
+    # bucket every time and one machine can submit without limit. The burst tier
+    # is what a fumbling human hits; the IP tier is what a script hits.
+    #
+    # The burst COUNT is 6, and the reason is that a double-click costs either
+    # ONE attempt or TWO depending on a race, so the number has to work under
+    # both readings.
+    #
+    # apps/inquiries/dedupe.py makes the burst tier skip a submission the dedupe
+    # window has already accepted — the rate callable returns None, and None
+    # makes django-ratelimit skip the check without incrementing. So a repeat
+    # that arrives AFTER the first one finished is free. But the marker is
+    # written by the view, at the end: validation, then the reCAPTCHA network
+    # round-trip, then the insert and the notification rows. A genuine
+    # double-click fires ~100-300ms apart, so the second request can easily reach
+    # the rate callable while the first is still in flight and no marker exists
+    # yet — dedupe.py lists that case explicitly as one that falls through to
+    # being counted.
+    #
+    # Hence the arithmetic, which must hold either way:
+    #   race bites (double-click = 2)  -> 6 gives a lead THREE submissions
+    #   dedupe catches it (= 1)        -> 6 gives SIX distinct submissions
+    # At 4 the pessimistic case was two submissions: submit, spot a typo,
+    # resubmit, done. That was the real complaint.
+    #
+    # Raising this is cheap because the burst tier was never the abuse control —
+    # the email is attacker-chosen, so varying it buys a fresh bucket. Note also
+    # what this number does NOT bound: one (IP, email) gets six of these windows
+    # inside one inquiry_submit_ip hour, so a single submitter can reach that
+    # 10/h ceiling at ANY burst value. The burst count changes how fast they get
+    # there (two windows at 6, three at 4), not how much they can take.
+    #
+    # Keep it >= 2 or a double-click alone exhausts the window, and keep the
+    # WINDOW longer than INQUIRY_DEDUPE_WINDOW_SECONDS — apps/inquiries/tests.py
+    # pins both, and reads the value dynamically so tuning it here breaks nothing.
+    "inquiry_submit_burst":    env("RATE_LIMIT_INQUIRY_SUBMIT_BURST", default="6/10m"),
+    "inquiry_submit_ip":       env("RATE_LIMIT_INQUIRY_SUBMIT_IP", default="10/h"),
 }
+
+
+# ── Project-wide ceilings (DRF throttles) ────────────────────────────────────
+# Referenced by REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] above. Kept as its own
+# setting so the DECLARED policy stays readable under the test runner, which
+# neutralises the active rates but must not erase the choice.
+THROTTLE_RATES = {
+    # SAFETY NET, not the binding limit — and that demotion is the point.
+    #
+    # This is a single bucket per client IP covering every unauthenticated
+    # endpoint at once, so it cannot distinguish a login flood from a password
+    # reset, and behind NAT/CGNAT it cannot distinguish one person from a
+    # building. As the primary daily ceiling that made it actively harmful: one
+    # user's failed logins could refuse another user's password reset. The real
+    # daily caps are now per-endpoint, in RATE_LIMITS above.
+    #
+    # What it is still for: an endpoint nobody remembered to wire a limit onto.
+    # A new public POST added next year inherits this and nothing else, so it
+    # should be a number that stops abuse without ever binding on legitimate
+    # traffic — comfortably above the sum of the per-endpoint daily caps.
+    #
+    # It replaced a hardcoded 50/day that was only survivable because of a bug:
+    # the proxy's own address used to be part of the bucket key, so every counter
+    # silently reset whenever the platform edge rotated.
+    "anon": env("THROTTLE_ANON", default="1000/day"),
+    # The ONLY limit on the authenticated surface, per account (never per IP),
+    # identical for clients and staff. Replaces a 'user': '500/day' sliding
+    # budget — see apps/core/throttling.UserBurstRateThrottle for why the window,
+    # not the number, was the problem. Sized so no human can reach it while a
+    # frontend stuck in a retry loop trips it in about a second and recovers
+    # within the minute.
+    "user_burst": env("THROTTLE_USER_BURST", default="120/m"),
+}
+
+# Wired into DRF here rather than inside the REST_FRAMEWORK literal, because the
+# numbers above have to be declared in one block and that block has to come after
+# TESTING is known.
+#
+# Under the test runner every rate becomes None, which makes
+# SimpleRateThrottle.allow_request return True immediately — throttling off, the
+# same way RATELIMIT_ENABLE turns the per-endpoint limits off. Note it nulls the
+# RATES and leaves DEFAULT_THROTTLE_CLASSES wired: every view keeps reporting the
+# ceilings it really carries, so a test asserting "this endpoint opts out of
+# throttling" is testing something instead of being vacuously true everywhere.
+REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = (
+    {scope: None for scope in THROTTLE_RATES} if TESTING else THROTTLE_RATES
+)
+
+# Emit `event="throttle_near_limit"` once a DRF throttle bucket reaches this
+# fraction of its ceiling. Blocking is already logged, but a block is a lagging
+# signal — it only appears after someone has been refused. This is the leading
+# one, and it costs nothing: the throttle already holds its request history in
+# memory when it decides, so no extra cache round-trip is needed.
+# Raise toward 1.0 to hear about it later, lower it to hear earlier.
+THROTTLE_NEAR_LIMIT_FRACTION = env.float("THROTTLE_NEAR_LIMIT_FRACTION", default=0.8)
+
+# FALLBACK for the Retry-After header on a django-ratelimit 429 — no longer the
+# value itself. apps/core/views._retry_after reports the real wait: the
+# `time_left` of whichever tier actually filled, taking the LARGEST when more
+# than one is over, so a daily cap answers in hours instead of sending a client
+# back 1,440 times.
+#
+# It needs two routes to get there because RatelimitMiddleware hands the renderer
+# only the exception, and django-ratelimit raises a bare Ratelimited() carrying
+# nothing: a caller that already knows sets `retry_after` on the exception
+# (login), and the `_rl` helpers stash their tiers on the request so the renderer
+# can re-check them. This constant is what remains when neither applies — an
+# endpoint limited some other way, or rate limiting off under the test runner.
+RATELIMIT_RETRY_AFTER_SECONDS = env.int("RATELIMIT_RETRY_AFTER_SECONDS", default=60)
+
+
+# ── Adjacent, and NOT a rate limit ───────────────────────────────────────────
+# How long an IDENTICAL inquiry submission is treated as a double-click rather
+# than a second lead (apps/inquiries/services.create_inquiry). It prevents a
+# duplicate ROW and a duplicate pair of EMAILS; it does not limit anyone.
+#
+# It lives here because it has to be read together with
+# RATE_LIMITS["inquiry_submit_burst"] above: the window must fit INSIDE the burst
+# window, or a submission can be silently swallowed in a window the lead has no
+# attempt left in. apps/inquiries/tests.py asserts that relationship, so the two
+# numbers cannot drift apart unnoticed.
+INQUIRY_DEDUPE_WINDOW_SECONDS = env.int("INQUIRY_DEDUPE_WINDOW_SECONDS", default=120)

@@ -11,6 +11,8 @@ every template_name below maps to a Brevo dashboard template ID via a
 BREVO_TEMPLATE_* setting, see apps/notifications/README.md.
 """
 
+from datetime import timedelta
+
 from django.conf import settings
 from django.db import models, transaction
 from django.utils import timezone
@@ -22,11 +24,23 @@ class NotificationStatus(models.TextChoices):
     QUEUED = "queued", "Queued"
     SENT = "sent", "Sent"
     FAILED = "failed", "Failed"
-    # Terminal. FAILED means "will be retried"; ABANDONED means "we have stopped
-    # trying" — either the attempt budget ran out or the row sat undeliverable
-    # past the give-up window. The hourly sweep only looks at FAILED, so an
-    # ABANDONED row is never picked up again. It is kept (not deleted) so the
-    # failure stays queryable in the admin instead of vanishing silently.
+    # Never attempted, on purpose: the Brevo circuit breaker was open when this
+    # row's turn came, so it was parked rather than thrown at a dead API.
+    #
+    # Its own status because the alternative was lying to staff. These rows used
+    # to be FAILED with error_message="Deferred: Brevo is currently unavailable."
+    # and attempt_count=0 — correct behaviour under a label that told whoever was
+    # reading the admin that a send had been tried and had failed, when nothing
+    # had been tried at all. The retry sweep treats DEFERRED and FAILED
+    # identically (both are re-driven while attempts remain), so this is purely
+    # about what the admin says.
+    DEFERRED = "deferred", "Deferred (service down)"
+    # Terminal. FAILED and DEFERRED mean "will be retried"; ABANDONED means "we
+    # have stopped trying" — either the attempt budget ran out or the row sat
+    # undeliverable past the give-up window. The retry sweep re-drives FAILED,
+    # DEFERRED and stranded QUEUED rows only, so an ABANDONED row is never picked
+    # up again. It is kept (not deleted) for 90 days so the failure stays
+    # queryable in the admin instead of vanishing silently.
     ABANDONED = "abandoned", "Abandoned"
 
 
@@ -78,6 +92,8 @@ class NotificationType(models.TextChoices):
     MILESTONE_PAID = "milestone_paid", "Payment milestone paid"
     USER_CREDENTIALS = "user_credentials", "User credentials"
     PASSWORD_RESET = "password_reset", "Password reset"
+    INQUIRY_RECEIVED = "inquiry_received", "Inquiry received"
+    INQUIRY_SUBMITTED_INTERNAL = "inquiry_submitted_internal", "New inquiry submitted"
 
 
 class NotificationTypeSettings(models.Model):
@@ -110,12 +126,19 @@ class NotificationTypeSettings(models.Model):
 
 class ScheduledTaskSettings(models.Model):
     """
-    Admin on/off switch for a background/periodic Celery task, independent of
-    any per-notification-type gate (NotificationTypeSettings) — whether this
-    specific job runs at all (e.g. pause the payment-due digest without
-    touching the beat schedule or redeploying). Fail-open: a task_key with no
-    row runs normally, same reasoning as NotificationTypeSettings, so a newly
-    added task works immediately before anyone remembers to seed a row for it.
+    Admin on/off switch for a background/scheduled task, independent of any
+    per-notification-type gate (NotificationTypeSettings) — whether this specific
+    job runs at all (e.g. pause the payment-due digest without touching the cron
+    schedule or redeploying). Fail-open: a task_key with no row runs normally,
+    same reasoning as NotificationTypeSettings, so a newly added task works
+    immediately before anyone remembers to seed a row for it.
+
+    This survived the removal of Celery unchanged, and is now the *only*
+    admin-editable control over background work: every gated task still checks
+    `is_task_enabled` as its first statement, whether it is invoked by
+    `manage.py run_scheduled <group>` from platform cron or dispatched into the
+    in-process pool. What moved out of the admin is task *timing* — that lives in
+    each cron service's schedule now, not in a PeriodicTask row.
 
     Deliberately NOT applied to notifications.tasks.send_notification_task
     (the low-level "send this one already-approved, already-queued
@@ -153,9 +176,16 @@ class ServiceStatus(models.TextChoices):
 class ServiceHealthState(models.Model):
     """
     Current up/down health of an external dependency (today just Brevo), updated
-    from two places — the real send path (passive) and the active probe — so an
-    outage is caught before an email is even sent. See apps/notifications/README.md
-    and docs/OBSERVABILITY_STANDARD.md.
+    from the real send path: every send outcome records into it, so a burst of
+    failures trips the breaker and later sends park instead of hammering a dead
+    API. See apps/notifications/README.md and docs/OBSERVABILITY_STANDARD.md.
+
+    There used to be a second, active writer — a probe hitting Brevo's account
+    endpoint every 5 minutes, which caught an outage before any email was sent.
+    It was removed with Celery: 288 scheduled runs and 576 outbound HTTPS calls a
+    day, to learn a few minutes earlier what the next real send would have told
+    us. Detection is now purely passive, which is why DOWN_STALE_AFTER below
+    matters more than it used to.
 
     Two jobs in one row:
       1. Admin-visible "is Brevo up?" status (this is a plain admin table).
@@ -178,10 +208,22 @@ class ServiceHealthState(models.Model):
     last_error = models.TextField(blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # Consecutive failures before the passive (real-send) path declares an
-    # outage. The probe passes a lower threshold — it's a deliberate health
-    # check, so it shouldn't need three misses to react.
+    # Consecutive failures before the send path declares an outage. Callers may
+    # pass a lower threshold for a more deliberate signal.
     FAILURE_THRESHOLD = 3
+
+    # How long a `down` verdict is trusted. Past this, is_down() reports False
+    # and the next real send is allowed to probe Brevo itself.
+    #
+    # This is a deadlock guard, and a necessary one. `down` is only cleared by a
+    # *successful* send, and while it is set every normal send parks itself
+    # without attempting — so the only thing that can clear it is a forced send
+    # from the retry sweep. If that sweep is off (ScheduledTaskSettings) or its
+    # cron service is broken, a stale `down` row parks EVERY notification in the
+    # platform, indefinitely, with nothing surfacing why. There is no active
+    # probe to break the tie any more. Thirty minutes of parked mail during a
+    # real outage is a good trade for never being permanently mute.
+    DOWN_STALE_AFTER = timedelta(minutes=30)
 
     class Meta:
         verbose_name = "Service Health State"
@@ -224,5 +266,24 @@ class ServiceHealthState(models.Model):
 
     @classmethod
     def is_down(cls, service: str) -> bool:
-        row = cls.objects.filter(service=service).only("status").first()
-        return row is not None and row.status == ServiceStatus.DOWN
+        """Is this dependency known-down *right now*?
+
+        A `down` verdict older than DOWN_STALE_AFTER is treated as unknown — see
+        that constant for why. Note this only relaxes the breaker; it does not
+        write the row back to `up`, so the admin still shows the last real
+        verdict and the next send outcome is what actually updates it.
+        """
+        row = (
+            cls.objects.filter(service=service)
+            .only("status", "last_failure_at")
+            .first()
+        )
+        if row is None or row.status != ServiceStatus.DOWN:
+            return False
+
+        if row.last_failure_at is None:
+            # DOWN with no recorded failure can only come from a hand-edit or a
+            # fixture. Don't let it park mail forever.
+            return False
+
+        return timezone.now() - row.last_failure_at < cls.DOWN_STALE_AFTER

@@ -7,12 +7,14 @@ docs/OBSERVABILITY_STANDARD.md).
 Every inbound request is tagged with a request ID (taken from an inbound
 ``X-Request-ID`` header if present, else freshly generated). The ID is stashed
 in a ``ContextVar`` so the logging filter (apps/core/logging.RequestContextFilter)
-and the Celery glue (apps/core/observability) can read it without threading it
-through every call.
+can read it without threading it through every call.
 
-The same ID is echoed back on the response and propagated to Celery tasks, so
-one logical operation — a web request plus any background jobs it enqueues —
-shares a single correlation ID end to end.
+The same ID is echoed back on the response and carried into background work: a
+``ContextVar`` is not inherited by a new thread, so apps/core/background copies
+the caller's context into the worker thread explicitly (this replaced three
+Celery signal handlers that used to carry the id across the broker as a task
+header). One logical operation — a web request plus any background job it
+dispatches — therefore shares a single correlation ID end to end.
 
 ``user_id`` is captured best-effort once the view has run (DRF resolves
 ``request.user`` lazily during the view, so it is not reliably known earlier).
@@ -26,8 +28,8 @@ ForcePasswordChangeMiddleware — both are registered and coexist.
 import contextvars
 import uuid
 
-# Default to None outside a request (management commands, Celery worker startup)
-# so log records still format cleanly with no request in scope.
+# Default to None outside a request (management commands, the run_scheduled cron
+# groups) so log records still format cleanly with no request in scope.
 request_id_var: "contextvars.ContextVar[str | None]" = contextvars.ContextVar(
     "request_id", default=None
 )

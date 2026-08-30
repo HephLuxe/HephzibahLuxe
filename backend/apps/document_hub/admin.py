@@ -7,8 +7,13 @@ from apps.core.admin import ATTRIBUTION_FIELDS, AttributionAdminMixin
 
 from . import services
 from .models import (
-    ClientDocument, Invoice, PaymentMilestone, PaymentSchedule, PortalDefaults,
-    ReferenceCounter, Receipt,
+    ClientDocument,
+    Invoice,
+    PaymentMilestone,
+    PaymentSchedule,
+    PortalDefaults,
+    Receipt,
+    ReferenceCounter,
 )
 
 

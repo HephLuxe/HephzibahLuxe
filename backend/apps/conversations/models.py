@@ -3,7 +3,7 @@ import uuid
 from django.db import models
 
 from apps.core.models import AttributedModel
-from apps.portal.models import ClientPortal, PlanningPhase
+from apps.portal.models import PlanningPhase
 
 
 class ContactMethod(models.TextChoices):

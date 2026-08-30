@@ -1,43 +1,37 @@
 """
 apps/core/observability.py
 
-Observability wiring: Sentry (→ GlitchTip) initialisation + Celery request-id
-propagation (part of the observability standard — see
-docs/OBSERVABILITY_STANDARD.md).
+Observability wiring: Sentry (→ GlitchTip) initialisation (part of the
+observability standard — see docs/OBSERVABILITY_STANDARD.md).
 
 ``init_sentry`` is called from settings, guarded by SENTRY_DSN so it is a no-op
 in local/dev/test (no DSN configured). ``before_send`` reuses the same scrub
 policy as structured logging (apps/core/logging.scrub) so no secret leaks into
 an event payload.
 
-The Celery signal handlers carry the web request's correlation id into the
-worker: the id is attached as a task header when a task is published, and
-restored into the worker's contextvar when the task runs — so a job's logs and
-errors share the id of the request that enqueued it.
+Correlation-id propagation into background work is no longer wired here. It used
+to need three Celery signal handlers to carry ``request_id_var`` across the
+broker as a task header. Deferred work now runs in a thread inside the same
+process, so apps/core/background copies the caller's ``contextvars`` into the
+worker thread directly — the id travels by construction rather than by protocol.
 """
 
 import logging
 
-from celery.signals import before_task_publish, task_postrun, task_prerun
-
 from apps.core.logging import scrub
-from apps.core.middleware import request_id_var
 
 logger = logging.getLogger("apps.core.observability")
-
-_REQUEST_ID_HEADER = "x_request_id"
 
 
 def init_sentry(dsn: str, environment: str, release: "str | None" = None,
                 traces_sample_rate: float = 0.1) -> None:
-    """Initialise Sentry (GlitchTip-compatible) for web + Celery.
+    """Initialise Sentry (GlitchTip-compatible).
 
     No-op if the SDK isn't installed. Points at GlitchTip via the DSN — GlitchTip
     speaks the Sentry ingest protocol, so no GlitchTip-specific client is needed.
     """
     try:
         import sentry_sdk
-        from sentry_sdk.integrations.celery import CeleryIntegration
         from sentry_sdk.integrations.django import DjangoIntegration
         from sentry_sdk.integrations.redis import RedisIntegration
     except ImportError:  # pragma: no cover
@@ -59,38 +53,9 @@ def init_sentry(dsn: str, environment: str, release: "str | None" = None,
         release=release,
         integrations=[
             DjangoIntegration(),
-            CeleryIntegration(),
             RedisIntegration(),
         ],
         traces_sample_rate=traces_sample_rate,
         send_default_pii=False,
         before_send=before_send,
     )
-
-
-# ---------------------------------------------------------------------------
-# Celery correlation-id propagation
-# ---------------------------------------------------------------------------
-
-@before_task_publish.connect
-def _attach_request_id(headers=None, **kwargs):
-    """Stamp the current request id onto the outgoing task's headers."""
-    if headers is not None:
-        rid = request_id_var.get()
-        if rid:
-            headers[_REQUEST_ID_HEADER] = rid
-
-
-@task_prerun.connect
-def _restore_request_id(task=None, **kwargs):
-    """Restore the correlation id into the worker's context for this task run."""
-    rid = None
-    request = getattr(task, "request", None)
-    if request is not None:
-        rid = getattr(request, _REQUEST_ID_HEADER, None)
-    request_id_var.set(rid)
-
-
-@task_postrun.connect
-def _clear_request_id(**kwargs):
-    request_id_var.set(None)

@@ -1,0 +1,351 @@
+# Grafana provisioning — alert rules for hephzibah-api.
+#
+# Replace LOKI_DATASOURCE_UID before installing (Connections -> Loki -> UID in the URL).
+# Install grafana-contact-points.yaml FIRST; severity labels route through it.
+#
+# `event` is a PARSED field, not a stream label, so it goes after `| json`,
+# never inside `{}`. See docs/observability/README.md for the log shape.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: heph-p1-page
+    folder: Hephzibah
+    interval: 5m
+    rules:
+      - uid: heph-inquiry-no-recipients
+        title: Inquiry captured but nobody was notified
+        condition: THRESHOLD
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "A lead was saved and NOBODY was told"
+          description: "receives_inquiry_alerts is unticked on every active staff account, or the only flagged staff member was offboarded. The client still got their acknowledgement, so there will be no complaint. Fix: Django admin -> Users -> tick receives_inquiry_alerts. This must be zero."
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: QUERY
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: LOKI_DATASOURCE_UID
+            model:
+              refId: QUERY
+              queryType: instant
+              expr: 'sum(count_over_time({service="hephzibah-api"} | json | event=`inquiry_no_recipients` [600s]))'
+          - refId: THRESHOLD
+            datasourceUid: __expr__
+            model:
+              refId: THRESHOLD
+              type: threshold
+              expression: QUERY
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+      - uid: heph-client-ip-unresolved
+        title: Client IP could not be resolved
+        condition: THRESHOLD
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Every client is sharing one rate-limit bucket"
+          description: "The edge stopped sending X-Forwarded-For, so resolve_client_ip fell back to the proxy address. Every rate limit is now effectively global and one busy caller can refuse everyone. This must be zero."
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: QUERY
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: LOKI_DATASOURCE_UID
+            model:
+              refId: QUERY
+              queryType: instant
+              expr: 'sum(count_over_time({service="hephzibah-api"} | json | event=`client_ip_unresolved` [600s]))'
+          - refId: THRESHOLD
+            datasourceUid: __expr__
+            model:
+              refId: THRESHOLD
+              type: threshold
+              expression: QUERY
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+      - uid: heph-brevo-outage
+        title: Brevo outage detected
+        condition: THRESHOLD
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The email pipeline is down"
+          description: "No outbound mail is being delivered: inquiry acknowledgements, password-reset codes and staff alerts are all parked. Transition-only, so this fires once per outage rather than once per failed send. Recovery emits brevo_recovered."
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: QUERY
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: LOKI_DATASOURCE_UID
+            model:
+              refId: QUERY
+              queryType: instant
+              expr: 'sum(count_over_time({service="hephzibah-api"} | json | event=`brevo_outage` [900s]))'
+          - refId: THRESHOLD
+            datasourceUid: __expr__
+            model:
+              refId: THRESHOLD
+              type: threshold
+              expression: QUERY
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+      - uid: heph-scheduled-group-failed
+        title: A scheduled cron group had a failing task
+        condition: THRESHOLD
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "A cron group failed: {{ $labels.group }}"
+          description: "One or more tasks in the group raised. The failed task labels are on the log line. The platform run history shows the same failure via the non-zero exit code."
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: QUERY
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: LOKI_DATASOURCE_UID
+            model:
+              refId: QUERY
+              queryType: instant
+              expr: 'sum(count_over_time({service="hephzibah-api"} | json | event=`scheduled_group_failed` [900s]))'
+          - refId: THRESHOLD
+            datasourceUid: __expr__
+            model:
+              refId: THRESHOLD
+              type: threshold
+              expression: QUERY
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+      - uid: heph-cron-notify-silent
+        title: Cron group 'notification_retry' has stopped running
+        condition: THRESHOLD
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No successful 'notification_retry' run in 30 minutes (runs every 10)"
+          description: "The cron service is paused, deleted, or its schedule is wrong. Nothing FAILED - nothing happened, which is why this watches for absence. For notification_retry this means failed emails are never retried and debounced event-details mail never sends."
+        # NoData is the alerting condition here, not an error: no lines at all
+        # means the cron never ran, which is exactly what this watches for.
+        noDataState: Alerting
+        execErrState: Error
+        data:
+          - refId: QUERY
+            relativeTimeRange: { from: 1800, to: 0 }
+            datasourceUid: LOKI_DATASOURCE_UID
+            model:
+              refId: QUERY
+              queryType: instant
+              expr: 'sum(count_over_time({service="hephzibah-api"} | json | event=`scheduled_group_completed` | group=`notification_retry` [1800s]))'
+          - refId: THRESHOLD
+            datasourceUid: __expr__
+            model:
+              refId: THRESHOLD
+              type: threshold
+              expression: QUERY
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+      - uid: heph-cron-daily-silent
+        title: Cron group 'daily_maintenance' has stopped running
+        condition: THRESHOLD
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No successful 'daily_maintenance' run in 26 hours (runs 08:00 daily)"
+          description: "The cron service is paused, deleted, or its schedule is wrong. Nothing FAILED - nothing happened, which is why this watches for absence. For notification_retry this means failed emails are never retried and debounced event-details mail never sends."
+        # NoData is the alerting condition here, not an error: no lines at all
+        # means the cron never ran, which is exactly what this watches for.
+        noDataState: Alerting
+        execErrState: Error
+        data:
+          - refId: QUERY
+            relativeTimeRange: { from: 93600, to: 0 }
+            datasourceUid: LOKI_DATASOURCE_UID
+            model:
+              refId: QUERY
+              queryType: instant
+              expr: 'sum(count_over_time({service="hephzibah-api"} | json | event=`scheduled_group_completed` | group=`daily_maintenance` [93600s]))'
+          - refId: THRESHOLD
+            datasourceUid: __expr__
+            model:
+              refId: THRESHOLD
+              type: threshold
+              expression: QUERY
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+      - uid: heph-cron-weekly-silent
+        title: Cron group 'weekly_maintenance' has stopped running
+        condition: THRESHOLD
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No successful 'weekly_maintenance' run in 8 days (runs 03:00 Mondays)"
+          description: "The cron service is paused, deleted, or its schedule is wrong. Nothing FAILED - nothing happened, which is why this watches for absence. For notification_retry this means failed emails are never retried and debounced event-details mail never sends."
+        # NoData is the alerting condition here, not an error: no lines at all
+        # means the cron never ran, which is exactly what this watches for.
+        noDataState: Alerting
+        execErrState: Error
+        data:
+          - refId: QUERY
+            relativeTimeRange: { from: 691200, to: 0 }
+            datasourceUid: LOKI_DATASOURCE_UID
+            model:
+              refId: QUERY
+              queryType: instant
+              expr: 'sum(count_over_time({service="hephzibah-api"} | json | event=`scheduled_group_completed` | group=`weekly_maintenance` [691200s]))'
+          - refId: THRESHOLD
+            datasourceUid: __expr__
+            model:
+              refId: THRESHOLD
+              type: threshold
+              expression: QUERY
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+
+  - orgId: 1
+    name: heph-p2-notify
+    folder: Hephzibah
+    interval: 10m
+    rules:
+      - uid: heph-brevo-send-failed
+        title: Brevo sends failing without tripping the circuit
+        condition: THRESHOLD
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 5 failed sends in 30 minutes"
+          description: "Individual sends are failing but ServiceHealthState has not flipped to down. Often a bad template id or a rejected recipient rather than an outage. Check the failing template_name on the log lines."
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: QUERY
+            relativeTimeRange: { from: 1800, to: 0 }
+            datasourceUid: LOKI_DATASOURCE_UID
+            model:
+              refId: QUERY
+              queryType: instant
+              expr: 'sum(count_over_time({service="hephzibah-api"} | json | event=`brevo_send_failed` [1800s]))'
+          - refId: THRESHOLD
+            datasourceUid: __expr__
+            model:
+              refId: THRESHOLD
+              type: threshold
+              expression: QUERY
+              conditions:
+                - evaluator: { type: gt, params: [5] }
+      - uid: heph-unknown-timezone
+        title: A stored timezone no longer resolves
+        condition: THRESHOLD
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "An account's timezone is invalid"
+          description: "resolve_timezone_name fell back to UTC for this user, so their payment-due and meeting-prep digests are computed against the wrong calendar day. Fix the value on the account; the model validates on save, so this is a pre-existing row or a tzdata rename."
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: QUERY
+            relativeTimeRange: { from: 3600, to: 0 }
+            datasourceUid: LOKI_DATASOURCE_UID
+            model:
+              refId: QUERY
+              queryType: instant
+              expr: 'sum(count_over_time({service="hephzibah-api"} | json | event=`unknown_timezone` [3600s]))'
+          - refId: THRESHOLD
+            datasourceUid: __expr__
+            model:
+              refId: THRESHOLD
+              type: threshold
+              expression: QUERY
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+      - uid: heph-login-lockouts-spiking
+        title: Login lockouts are spiking
+        condition: THRESHOLD
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 5 accounts locked in an hour"
+          description: "One or two is someone who forgot a password. A spike is a credential-stuffing campaign - the lock is holding, but check whether one account is being singled out. Release with the admin's 'Release login lock' action."
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: QUERY
+            relativeTimeRange: { from: 3600, to: 0 }
+            datasourceUid: LOKI_DATASOURCE_UID
+            model:
+              refId: QUERY
+              queryType: instant
+              expr: 'sum(count_over_time({service="hephzibah-api"} | json | event=`login_account_locked` [3600s]))'
+          - refId: THRESHOLD
+            datasourceUid: __expr__
+            model:
+              refId: THRESHOLD
+              type: threshold
+              expression: QUERY
+              conditions:
+                - evaluator: { type: gt, params: [5] }
+      - uid: heph-background-timer-cap
+        title: In-process timer cap reached
+        condition: THRESHOLD
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The background timer cap was hit"
+          description: "Debounced email is falling back to the cron sweep, so it lands up to 10 minutes late rather than on time. Nothing is lost. It means far more timers are being armed than expected - check for an edit loop."
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: QUERY
+            relativeTimeRange: { from: 1800, to: 0 }
+            datasourceUid: LOKI_DATASOURCE_UID
+            model:
+              refId: QUERY
+              queryType: instant
+              expr: 'sum(count_over_time({service="hephzibah-api"} | json | event=`background_timer_cap` [1800s]))'
+          - refId: THRESHOLD
+            datasourceUid: __expr__
+            model:
+              refId: THRESHOLD
+              type: threshold
+              expression: QUERY
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+      - uid: heph-admin-login-lockout
+        title: An admin account was locked out of /admin/login/
+        condition: THRESHOLD
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The Django admin door locked an account"
+          description: "Fires on ANY occurrence, not a spike - unlike login_account_locked. `role=admin` forces is_superuser, so /admin/login/ is the whole control plane and it has a handful of human users; one lockout is either an operator who needs the break-glass or someone guessing at the account that owns everything. Check `has_account` on the log line: false means the address has no account here and this is a probe, not your colleague. Recovery does NOT go through the admin (the release button is behind the locked door) - see RUNBOOK 'You are locked out of the Django admin yourself'."
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: QUERY
+            relativeTimeRange: { from: 3600, to: 0 }
+            datasourceUid: LOKI_DATASOURCE_UID
+            model:
+              refId: QUERY
+              queryType: instant
+              expr: 'sum(count_over_time({service="hephzibah-api"} | json | event=`admin_login_account_locked` [3600s]))'
+          - refId: THRESHOLD
+            datasourceUid: __expr__
+            model:
+              refId: THRESHOLD
+              type: threshold
+              expression: QUERY
+              conditions:
+                - evaluator: { type: gt, params: [0] }

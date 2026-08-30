@@ -2,35 +2,44 @@ from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils.text import slugify
+from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.core.utils import save_with_attribution
-from rest_framework import status
-from rest_framework.exceptions import ValidationError
-
 from apps.core.error_codes import INVALID_TRANSITION, NOT_FOUND, VALIDATION_ERROR
-from apps.core.permissions import IsStaffOrSuperuser, can_access_portal, enforce, is_staff_or_superuser
+from apps.core.permissions import (
+    IsStaffOrSuperuser,
+    can_access_portal,
+    enforce,
+    is_staff_or_superuser,
+)
+from apps.core.utils import save_with_attribution
 from apps.portal.models import ClientPortal, PlanningPhase
+
+from . import services
 from .models import (
-    Meeting, MeetingNotes, MeetingPrepItem, MeetingStatus, PrepItemField, PrepItemFileUpload,
+    Meeting,
+    MeetingNotes,
+    MeetingPrepItem,
+    MeetingStatus,
+    PrepItemField,
+    PrepItemFileUpload,
 )
 from .serializers import (
     MeetingCreateSerializer,
     MeetingDetailSerializer,
     MeetingListSerializer,
     MeetingNotesSerializer,
-    MeetingPrepItemSerializer,
     MeetingPrepItemCreateSerializer,
+    MeetingPrepItemSerializer,
     MeetingPrepItemUpdateSerializer,
-    PrepItemFieldSerializer,
-    PrepItemFieldCreateSerializer,
-    PrepItemFieldUpdateSerializer,
     MeetingUpdateSerializer,
+    PrepItemFieldCreateSerializer,
+    PrepItemFieldSerializer,
+    PrepItemFieldUpdateSerializer,
 )
-from . import services
-
 
 # ── Envelope helper (see apps/core/exceptions.py for the exception-path half) ──
 

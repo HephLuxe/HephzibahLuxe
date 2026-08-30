@@ -7,7 +7,12 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.core.error_codes import CONFIRMATION_REQUIRED, EVENT_DETAILS_LOCKED, NOT_FOUND, VALIDATION_ERROR
+from apps.core.error_codes import (
+    CONFIRMATION_REQUIRED,
+    EVENT_DETAILS_LOCKED,
+    NOT_FOUND,
+    VALIDATION_ERROR,
+)
 from apps.core.pagination import StandardPageNumberPagination
 from apps.core.utils import save_with_attribution
 from apps.portal.models import ClientPortal, EventEngagement
@@ -32,20 +37,44 @@ def _error(detail: str, code: str, http_status: int, errors: dict | None = None)
 
 def _list_response(request, queryset, serializer_cls):
     """
-    Serialize a list, opting into pagination ONLY when the caller asks for it
-    (``?page=`` or ``?page_size=``). Without those params the full list is
-    returned unchanged — backward compatible with existing clients — but a large
-    "all events / all days" dataset can be paged with the standard
-    ``{count, next, previous, results}`` envelope (see apps/core/pagination.py).
-    Request context is always passed so image URLs render absolute.
+    Serialize a list into the standard ``{count, next, previous, results}``
+    envelope. Request context is always passed so image URLs render absolute.
+
+    ALWAYS paginated. This used to opt in only when the caller passed ``?page=``
+    or ``?page_size=``, which meant the default response serialised the entire
+    table — for a staff caller, every event on the platform in one payload. Rate
+    limiting caps how MANY requests a caller makes, not how much each one hands
+    over, so an unbounded list needs exactly one request to give up everything
+    it can see; bounding the page is the control that actually applies. Same
+    reasoning as GET /inquiries/ and GET /users/.
+
+    Both callers are role-scoped already (a client sees only their own events),
+    so this is not about cross-tenant exposure — it is about a staff token, and
+    about a response whose size grows with the business.
+
+    This DID change the response shape: the unpaginated form returned a bare
+    JSON array, so callers move from ``res.map(...)`` to ``res.results.map(...)``.
+    That is why it was not carried over with the /inquiries/ fix — that endpoint
+    already returned ``{count, results}`` and could be migrated invisibly. The
+    page size is unchanged from what ``?page=1`` already produced, so only the
+    default path moves.
+
+    Ordering is forced when the caller has not set any, and that is a
+    correctness requirement rather than tidiness — it only becomes a bug once a
+    list is paged. Postgres guarantees no row order without ORDER BY, so
+    LIMIT/OFFSET over an unordered queryset can hand the same row out on two
+    pages and skip another entirely. Unpaginated, this was invisible: every row
+    came back regardless of order. ``-created_at`` is the meaningful key and
+    ``-id`` breaks ties, since two rows sharing an auto_now_add tick would
+    otherwise still be non-deterministic.
     """
-    if "page" in request.query_params or "page_size" in request.query_params:
-        paginator = StandardPageNumberPagination()
-        page = paginator.paginate_queryset(queryset, request)
-        data = serializer_cls(page, many=True, context={"request": request}).data
-        return paginator.get_paginated_response(data)
-    data = serializer_cls(queryset, many=True, context={"request": request}).data
-    return Response(data, status=status.HTTP_200_OK)
+    if not queryset.ordered:
+        queryset = queryset.order_by("-created_at", "-id")
+
+    paginator = StandardPageNumberPagination()
+    page = paginator.paginate_queryset(queryset, request)
+    data = serializer_cls(page, many=True, context={"request": request}).data
+    return paginator.get_paginated_response(data)
 
 
 def _event_details_locked_for_event(event: Event) -> bool:

@@ -3,9 +3,10 @@
 The `core` app is the shared foundation the other apps build on — it owns no
 database tables of its own and exposes no endpoints. Instead it provides the
 abstract base models, the permission vocabulary, the standard error envelope,
-the file-upload path builders, pagination strategies, and the deep-link
-registry that the feature apps (`meetings`, `portal`, `document_hub`, …) reuse
-so those concerns are defined once, not re-implemented per app.
+the file-upload path builders, pagination strategies, the deep-link registry,
+in-process background execution, and per-recipient calendar dates — concerns the
+feature apps (`meetings`, `portal`, `document_hub`, …) reuse so they are defined
+once, not re-implemented per app.
 
 ---
 
@@ -64,12 +65,57 @@ can change; codes are stable). The shape:
 }
 ```
 
+* **`ratelimit.py`**: the single source of truth for **"who is the client"**.
+  Four things need that answer and must never disagree — the per-endpoint
+  rate-limit key callables, the DRF throttles, django-ratelimit's built-in
+  `key='ip'` path (via `RATELIMIT_IP_META_KEY`), and the password-reset audit
+  trail. Nothing else in the codebase may read `REMOTE_ADDR` or
+  `X-Forwarded-For`; before this module owned all four there were three
+  implementations and two were wrong.
+
+  * **`resolve_client_ip(request)`** — the exact client address. **It walks
+    `X-Forwarded-For` right-to-left and returns the first entry that isn't
+    inside the trusted-proxy CIDR set (RFC-1918 + loopback).** Reading
+    right-to-left is what makes the header safe to use at all: every proxy in
+    both deployment shapes *appends*, so anything a client prepends sits to the
+    left of the real address and is never reached — a caller sending
+    `X-Forwarded-For: 9.9.9.9` is still bucketed under their own address. If
+    `REMOTE_ADDR` is **not** a trusted proxy the connection came in directly, so
+    XFF is fully attacker-controlled and is discarded outright.
+
+    This is deliberately *not* DRF's `NUM_PROXIES` approach, which says "take
+    the Nth entry from the right". A count goes stale silently the moment a hop
+    is added or removed; trusting by *identity* survives that. `NUM_PROXIES` is
+    unset and unreachable — every throttle overrides `get_ident` — and
+    `test_no_throttle_in_the_project_consults_drf_num_proxies` keeps it that way.
+  * **`bucket_ip(request)`** — the same address masked to a prefix (IPv4 /32,
+    IPv6 /64) and used for **every** rate-limit bucket. The IPv6 default is the
+    point: a client typically owns a whole /64, so an unmasked key would hand
+    them a fresh bucket per request and make every IP-keyed limit free to bypass.
+  * **`client_ip` / `ip_and_email` / `email_key_for`** — thin adapters matching
+    django-ratelimit's `(group, request)` callable signature, so no consumer is
+    ever tempted to write a fifth implementation to fit its own.
+
 * **`error_codes.py`**: the canonical `code` values a client may receive —
   `authentication_required`, `invalid_credentials`, `permission_denied`,
   `not_found`, `validation_error`, `invalid_transition`, `contacts_locked`,
   `event_details_locked`, `confirmation_required`, `rate_limited`,
-  `token_expired`, `token_invalid`, `internal_error`. New codes are added here
-  as constants, never inlined as string literals in views.
+  `throttled_global`, `password_reset_required`, `token_invalid`,
+  `internal_error`. New codes are added here as constants, never inlined as
+  string literals in views. There is deliberately **no** `token_expired`:
+  SimpleJWT raises `InvalidToken` for an expired token and a malformed one
+  alike, so it could never be emitted, and a code a client can never receive is
+  worse than none — it invites a branch that never runs.
+  `password_reset_required` is a **401 on login** and is distinct from
+  `invalid_credentials` because retrying cannot help: the account has run out of
+  sign-in attempts and the holder has to complete a password reset (or wait the
+  window out). See `apps/accounts/README.md` §1b.
+  `rate_limited` and `throttled_global` are both 429s and are deliberately
+  distinct: the first is a per-endpoint limit the caller tripped themselves
+  (retry after the window and it clears), the second is the shared ceiling on
+  all unauthenticated traffic from one IP, which may have been exhausted by
+  somebody else behind the same NAT — so retrying sooner will not help. They
+  used to share one code, which made a 429 impossible to attribute.
 * **`custom_exception_handler`**: the project-wide DRF handler. It does two
   things:
   1. **Injects `code`** into responses DRF already built for handled
@@ -166,6 +212,51 @@ than a hand-typed URL string.
 > entries come back resolved to `{ label, url, target_type, target_id }`. Route
 > it with your client-side router; a link whose target was deleted is simply
 > absent from the response.
+
+---
+
+## Background Execution (`background.py`)
+
+The replacement for the Celery broker — a bounded thread pool inside the web
+process, plus the `@background_task` decorator every deferred task uses. Nothing
+polls. Async dispatch is **opt-in per process and only `config/wsgi.py` opts in**;
+everywhere else `.delay()` runs inline, which is what makes a cron sweep able to
+send its own mail before exiting. Full reasoning, the durability invariant and the
+five details that are easy to get wrong are in the module docstring and
+[`docs/adr/0001-remove-celery.md`](../../docs/adr/0001-remove-celery.md).
+
+Companion: `management/commands/run_scheduled.py` — the whole scheduler. One
+cadence group per invocation, run to completion, exit; platform cron calls it.
+
+---
+
+## Recipient Timezones (`timezones.py`)
+
+`local_today(user)` — today's calendar date **for that recipient**, and
+`max_utc_offset_days()` — the constant the digests widen their queries by.
+
+`TIME_ZONE` stays `UTC` and `USE_TZ` stays `True`: that is how *instants* should be
+stored. But `PaymentMilestone.due_date` and `Meeting.date` are naive `DateField`s —
+a calendar day in the client's world — and the daily digests compare against them.
+Using `timezone.now().date()` there compares a client's due date against UTC's
+today, which is a different day for anyone far enough from UTC, so a three-day
+lookahead fires two or four days out. On a worldwide platform that is routine, not
+a corner case.
+
+Resolution order: `User.timezone`, else `settings.PLATFORM_DEFAULT_TIMEZONE`, else
+UTC. Reads **fail soft** — an unknown zone name logs `event=unknown_timezone` and
+degrades to UTC rather than raising, because one malformed row must not take out a
+whole digest run. Writes fail loud (`User.clean()`, the API's `TimezoneField`), or
+the soft fallback would hide the mistake for ever.
+
+The digests use it in one shape worth knowing: widen the SQL window by
+`max_utc_offset_days()` to get a guaranteed superset, then make the exact
+per-recipient decision in Python. One query, exact answer — rather than a query
+per distinct timezone.
+
+What it deliberately does **not** do is change *when* a digest fires; that is
+still one cron run at 08:00 UTC. Sending to each timezone at its own local 08:00
+is a separate change, recorded as a follow-up in the ADR.
 
 ---
 

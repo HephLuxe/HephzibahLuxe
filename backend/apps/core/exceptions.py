@@ -43,7 +43,7 @@ from apps.core.error_codes import (
     INVALID_CREDENTIALS,
     NOT_FOUND,
     PERMISSION_DENIED,
-    RATE_LIMITED,
+    THROTTLED_GLOBAL,
     TOKEN_INVALID,
     VALIDATION_ERROR,
 )
@@ -66,7 +66,13 @@ _CODE_BY_EXCEPTION = (
     (AuthenticationFailed, INVALID_CREDENTIALS),
     (PermissionDenied, PERMISSION_DENIED),
     (NotFound, NOT_FOUND),
-    (Throttled, RATE_LIMITED),
+    # DRF's Throttled is only ever raised by the throttles in
+    # DEFAULT_THROTTLE_CLASSES — the shared global ceiling. A per-endpoint
+    # django-ratelimit block never reaches this handler: it raises Ratelimited
+    # outside DRF's dispatch and is rendered by RATELIMIT_VIEW
+    # (apps.core.views.ratelimited) with code=rate_limited. So the two 429s are
+    # distinguishable, which is what makes a 429 burst attributable to a cause.
+    (Throttled, THROTTLED_GLOBAL),
     (ValidationError, VALIDATION_ERROR),
 )
 

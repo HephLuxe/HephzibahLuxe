@@ -3,22 +3,26 @@ import datetime
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.core.files.uploadedfile import UploadedFile
 from django.utils import timezone
-
 from rest_framework.exceptions import ValidationError
+
+from apps.core.uploads import DOCUMENT_TYPES, MAX_IMAGE_SIZE, validate_upload
+from apps.documents.models import DocumentCategory
+from apps.documents.services import register_document
+
 from .models import (
+    FieldType,
     Meeting,
     MeetingPrepItem,
     MeetingStatus,
-    FieldType,
     PrepItemField,
-    PrepItemResponse,
     PrepItemFileUpload,
+    PrepItemResponse,
 )
-from apps.documents.services import register_document
-from apps.documents.models import DocumentCategory
 
-ALLOWED_PREP_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"]
-MAX_PREP_UPLOAD_SIZE = 10 * 1024 * 1024  # 10MB — inspiration boards/photos, not raw video
+# Kept as names because tests and callers reference them; the values now come
+# from apps.core.uploads so this field cannot drift from the other ten.
+ALLOWED_PREP_UPLOAD_TYPES = list(DOCUMENT_TYPES)
+MAX_PREP_UPLOAD_SIZE = MAX_IMAGE_SIZE  # inspiration boards/photos, not raw video
 
 
 VALID_TRANSITIONS = {
@@ -53,13 +57,12 @@ def transition_meeting_status(meeting: Meeting, new_status: str) -> Meeting:
 
 
 def _validate_prep_upload(file: UploadedFile) -> None:
-    content_type = getattr(file, "content_type", None)
-    if content_type and content_type not in ALLOWED_PREP_UPLOAD_TYPES:
-        raise ValidationError(
-            f"'{file.name}' must be a PDF or image (JPEG, PNG, WebP)."
-        )
-    if file.size > MAX_PREP_UPLOAD_SIZE:
-        raise ValidationError(f"'{file.name}' exceeds the 10MB upload limit.")
+    validate_upload(
+        file,
+        max_size=MAX_PREP_UPLOAD_SIZE,
+        allowed_types=tuple(ALLOWED_PREP_UPLOAD_TYPES),
+        label=f"'{file.name}'",
+    )
 
 
 def submit_field_response(

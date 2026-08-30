@@ -8,10 +8,16 @@ from decimal import Decimal
 from rest_framework import serializers
 
 from apps.core.serializers import AttributionSerializerMixin
+from apps.core.uploads import validate_document
 
 from .models import (
-    SIGNABLE_CATEGORIES, ClientDocument, Invoice, PaymentMilestone, PaymentSchedule,
-    PortalDefaults, Receipt,
+    SIGNABLE_CATEGORIES,
+    ClientDocument,
+    Invoice,
+    PaymentMilestone,
+    PaymentSchedule,
+    PortalDefaults,
+    Receipt,
 )
 
 
@@ -29,6 +35,9 @@ class ClientDocumentSerializer(AttributionSerializerMixin, serializers.ModelSeri
         # reference_code is system-generated (see document_hub.services /
         # signals) — read-only, never accepted from the client.
         read_only_fields = ["id", "reference_code", "created_at", "updated_at"]
+
+    def validate_file(self, value):
+        return validate_document(value)
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -98,6 +107,9 @@ class InvoiceSerializer(AttributionSerializerMixin, serializers.ModelSerializer)
         # invoice_number is system-generated — read-only.
         read_only_fields = ["id", "invoice_number", "created_at"]
 
+    def validate_file(self, value):
+        return validate_document(value)
+
 
 class ReceiptSerializer(AttributionSerializerMixin, serializers.ModelSerializer):
     class Meta:
@@ -106,6 +118,9 @@ class ReceiptSerializer(AttributionSerializerMixin, serializers.ModelSerializer)
         ]
         # receipt_number is system-generated — read-only.
         read_only_fields = ["id", "receipt_number", "created_at"]
+
+    def validate_file(self, value):
+        return validate_document(value)
 
 
 class PortalDefaultsSerializer(serializers.ModelSerializer):
@@ -127,3 +142,15 @@ class PortalDefaultsSerializer(serializers.ModelSerializer):
             "faq_file": {"required": False},
             "welcome_message": {"required": False},
         }
+
+    # Three separate hooks rather than one validate(): DRF only runs
+    # validate_<field> for fields actually present in the payload, which is what
+    # makes a PATCH of one template leave the other two untouched.
+    def validate_service_agreement_file(self, value):
+        return validate_document(value)
+
+    def validate_welcome_booklet_file(self, value):
+        return validate_document(value)
+
+    def validate_faq_file(self, value):
+        return validate_document(value)
