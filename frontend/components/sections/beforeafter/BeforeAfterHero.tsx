@@ -1,3 +1,37 @@
+// export default function BeforeAfterHero() {
+//     return (
+//         <section className="relative w-full h-[40vh] landscape:h-[95vh] sm:h-[50vh] md:h-[50vh] lg:h-[100vh] xl:h-[100vh] overflow-hidden">
+//             {/* Background image */}
+//             <div className="absolute inset-0">
+//                 <div
+//                     className="w-full h-full bg-cover bg-center"
+//                     style={{ backgroundImage: "url(/images/beforeafterpage/bgheroba.jpg)" }}
+//                 />
+//             </div>
+
+//             {/* Text overlay */}
+//             <div className="absolute inset-0 flex items-center justify-center">
+//                 {/* BEFORE */}
+//                 <h1
+//                     className="font-display font-thin italic absolute text-primary leading-[1] text-[42px] sm:text-[58px] md:text-[80px] lg:text-[140px] xl:text-[160px] 2xl:text-[180px] right-[50%] mr-7 sm:mr-10 md:mr-14 lg:mr-[100px] xl:mr-[100px] 2xl:mr-[150px]"
+//                 >
+//                     BEFORE
+//                 </h1>
+
+//                 {/* After */}
+//                 <h1
+//                     className="font-display font-thin italic absolute text-background leading-[1] text-[52px] sm:text-[76px] md:text-[108px] lg:text-[190px] xl:text-[220px] 2xl:text-[250px] left-[50%] ml-7 sm:ml-10 md:ml-14 lg:ml-[100px] xl:ml-[100px] 2xl:ml-[150px]"
+//                 >
+//                     After
+//                 </h1>
+//             </div>
+//         </section>
+//     );
+// }
+
+
+
+
 import Image from "next/image";
 
 export default function BeforeAfterHero() {
@@ -26,7 +60,7 @@ export default function BeforeAfterHero() {
 
                 {/* & icon — dead center */}
                 <Image
-                    src="/icons/andsign.svg"
+                    src="/icons/andsigns.svg"
                     alt="and"
                     width={144}
                     height={144}
