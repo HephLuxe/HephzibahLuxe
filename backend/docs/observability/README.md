@@ -22,6 +22,22 @@ Install by dropping both into Grafana's provisioning directory
 - `LOKI_DATASOURCE_UID` — Grafana → Connections → Loki → copy the UID from the URL.
 - `NTFY_BASE` — your ntfy host, e.g. `https://ntfy.example.com`.
 
+The contact points post to `?template=grafana`, ntfy's built-in template for
+Grafana's webhook payload, so the ntfy server must be **>= 2.14.0**. Without it
+the request still succeeds and the notification still arrives — as the raw
+Grafana JSON envelope, unreadable on a phone. `grafana-contact-points.yaml`
+carries an inline-template fallback for older servers in its header comment.
+
+Tier is carried by an `X-Priority` header (5 for P1, 3 for P2), not by the topic
+— both tiers share `grafana-alerts`. On Android, priority 5 only rings through
+Do Not Disturb once that notification channel has been granted the DND override
+in the OS settings; the header does not do it alone. Verify on the phone that is
+meant to be woken before trusting a P1 to arrive:
+
+```
+curl -H "X-Priority: 5" -d "P1 test" NTFY_BASE/grafana-alerts
+```
+
 ## The log shape these queries match
 
 `HephJsonFormatter` emits, per line:
@@ -59,6 +75,7 @@ aspirational.
 |---|---|---|---|
 | `inquiry_no_recipients` | ERROR | `inquiries/services.py` | A lead was captured and **nobody was told**. The client still got their acknowledgement, so there is no complaint to alert you. Must be zero. |
 | `client_ip_unresolved` | WARNING | `core/ratelimit.py` | The edge stopped sending `X-Forwarded-For`, so **every client shares one rate-limit bucket**. Must be zero. |
+| `recaptcha_v2_key_in_use` | ERROR | `inquiries/recaptcha.py` | The configured secret is a **v2** key, so the v3 score threshold and the action/replay check are not running and every token that merely parses is accepted. Same shape as the row above — a protection control collapsed silently, nothing errored, the form still returns 201. One wrong env var, permanent until noticed, and it cannot be caught at deploy time (see below). Must be zero. |
 | `brevo_outage` | ERROR | `notifications/services.py` | The email pipeline is down. Transition-only, so a multi-hour outage pages once, not once per failed send. |
 | `scheduled_group_failed` | ERROR | `core/management/commands/run_scheduled.py` | A cron group had a failing task. |
 | *(absence of)* `scheduled_group_completed` | INFO | same | **A cron service stopped running at all.** A failed run is visible twice over; a run that never happens produces nothing. `notification_retry` is the only retry path for failed email and the only sender of debounced event-details mail. |
@@ -72,21 +89,28 @@ aspirational.
 | `login_account_locked` | WARNING | `accounts/views.py` | One or two is a person who forgot a password. A spike is a credential-stuffing campaign. |
 | `admin_login_account_locked` | WARNING | `core/admin_login.py` | The **admin door**, so this one alerts on any occurrence rather than a spike. `/admin/login/` has a handful of human users and `role=admin` forces `is_superuser`, so one lockout is either an operator needing the break-glass or someone guessing at the control plane. The `has_account` field separates the two. |
 | `background_timer_cap` | WARNING | `core/background.py` | The in-process timer cap was hit. Costs punctuality only (the cron sweep still delivers), but it means something is arming far more timers than expected. |
+| `recaptcha_unreachable` | WARNING | `inquiries/recaptcha.py` | Verification **failed open**: Google could not be reached and the submission was allowed anyway. That is the deliberate trade for lead capture — a lost lead is worse than a spam one — but for the duration the public form has no bot filter at all. There is no circuit breaker here (unlike Brevo), so this is one line per submission: it alerts on a burst, not on one. |
+| `recaptcha_bad_score` | ERROR | `inquiries/recaptcha.py` | Google returned a `score` that will not parse as a float. **Also fails open.** This should be impossible against a working v3 key, so a single occurrence means the siteverify response shape changed underneath us — alerts on any. |
 
 ### P3 — dashboard only
 
 `rate_limited`, `admin_login_rate_limited`, `throttle_near_limit`,
 `login_tier_exhausted`, `reset_code_rejected`, `inquiry_dedupe_hit`,
 `event_details_dispatched`, `notifications_purged`, `reset_tokens_pruned`,
-`brevo_recovered`, `brevo_send_deferred`, `health_dependency_down`.
+`brevo_recovered`, `brevo_send_deferred`, `health_dependency_down`,
+`recaptcha_rejected`, `recaptcha_low_score`, `recaptcha_action_mismatch`.
 
-Two are worth a **dashboard panel** even though they are not alerts:
+Three are worth a **dashboard panel** even though they are not alerts:
 
 - `rate_limited` broken down by `path` — the only way to tell whether a limit is
   mis-tuned before someone complains. Its `retry_after` field separates "clicking
   too fast" (60) from "hit a daily cap" (tens of thousands).
 - `throttle_near_limit` — the leading signal, fired at 80% occupancy, before
   anyone is refused.
+- `recaptcha_low_score` — plotted over time against its `recaptcha_threshold`
+  field, the only way to see whether the threshold is mis-tuned. `0.5` in
+  settings is Google's placeholder, not a measurement; if this climbs, the bar
+  is quietly eating real inquiries and nobody will ever report it.
 
 `health_dependency_down` (ERROR, `core/views.py`) records that
 `/health/ready/` could not reach Postgres or Redis, carrying `dependency`
@@ -103,6 +127,38 @@ the limit doing its job is not an incident — but read it differently on a
 dashboard. Nothing legitimate retries at `/admin/login/`, so unlike the API tiers
 it has no benign explanation in a NAT'd office; its `tier` field says whether the
 per-minute (`admin_login`) or daily (`admin_login_daily`) bucket filled.
+
+The three P3 reCAPTCHA events are the filter **working**, so none of them is an
+alert: `recaptcha_rejected` (Google said no), `recaptcha_low_score` (scored under
+the threshold for its action) and `recaptcha_action_mismatch` (a token minted for
+a different form on the shared site key). A rejection is the system doing its
+job. Read `recaptcha_action_mismatch` on a dashboard rather than ignoring it,
+though — one key pair covers every public form, so a sustained run of it is
+someone harvesting tokens from the cheap page to replay against a costlier one,
+which is the exact attack the action check exists to stop.
+
+## Why the reCAPTCHA failures cannot be a deploy-time check
+
+The three alerted reCAPTCHA events all describe verification **silently not
+happening**, which is normally an argument for catching it at boot instead of at
+runtime. That is not available here.
+
+`recaptcha_v2_key_in_use` fires because the siteverify response carried no
+`score` field, and a v2 and a v3 secret are indistinguishable as strings. Nor can
+you probe for it at startup: siteverify only returns `score` on a **successful**
+verification, so a dummy token tells you whether the secret is valid and never
+which version it is. The first real submission after a deploy is the earliest
+possible signal that the thresholds stopped running — hence a P1 rule rather than
+a settings guard.
+
+One state is invisible to every rule below: if `RECAPTCHA_SECRET_KEY` is **blank**
+in production, `verify_recaptcha` returns `True` on its first line and the view
+skips the call entirely, so none of these six events can ever fire. That is by
+design — `config/settings.py` deliberately exempts this key from the
+fail-at-boot block that covers `CACHE_REDIS_URL`, because the app must start
+without it — but it means "no reCAPTCHA events at all" reads as healthy and is
+not. Confirm the key is set when reading these panels; silence here is only
+evidence of health if verification is switched on.
 
 ## Why the heartbeat exists
 

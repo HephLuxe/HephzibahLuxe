@@ -311,13 +311,19 @@ class AdminUserCreationSerializer(serializers.ModelSerializer):
         # Generate random temporary password
         temp_password = generate_temporary_password()
 
+        # Injected by save_with_attribution as a save() kwarg, never read from
+        # the request body (created_by is editable=False and not in `fields`),
+        # so a caller cannot claim to have been registered by someone else.
+        created_by = validated_data.pop('created_by', None)
+
         # Create user
         user = User.objects.create_user(
             email=validated_data['email'],
             first_name=validated_data.get('first_name', ''),
             last_name=validated_data.get('last_name', ''),
             password=temp_password,
-            role=validated_data.get('role', 'client')
+            role=validated_data.get('role', 'client'),
+            created_by=created_by,
         )
 
         # Set force password change fields AFTER user creation

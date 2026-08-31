@@ -1,5 +1,6 @@
 import datetime
 import io
+import re
 import threading
 import time
 import uuid
@@ -155,7 +156,15 @@ class AttributionTests(TestCase):
             event_date=datetime.date(2027, 1, 1), **extra,
         )
 
-    def test_save_with_attribution_stamps_both_on_create(self):
+    def test_create_stamps_created_by_only_not_last_updated_by(self):
+        """A new row has a creator and no editor.
+
+        This used to stamp both, which made "never edited" and "edited by its
+        own creator" indistinguishable — a freshly created event came back
+        already naming a last editor, so the API reported an edit that had not
+        happened. NULL last_updated_by is now load-bearing: it is the only thing
+        that says nobody has touched the row since it was made.
+        """
         serializer = EventSerializer(data={
             "title": "x", "country": "NG", "state": "Lagos",
             "event_date": "2027-01-01", "event_type": "Wedding",
@@ -164,7 +173,39 @@ class AttributionTests(TestCase):
         self.assertTrue(serializer.is_valid(), serializer.errors)
         event = save_with_attribution(serializer, self.staff, celebrant=self.client_user)
         self.assertEqual(event.created_by, self.staff)
-        self.assertEqual(event.last_updated_by, self.staff)
+        self.assertIsNone(event.last_updated_by)
+        # …and that reads through to the API surface as an empty name.
+        self.assertEqual(EventSerializer(event).data["last_updated_by_display"], "")
+
+    def test_registering_a_client_attributes_both_the_user_and_their_portal(self):
+        """The portal a signal creates inherits the actor from the user row.
+
+        ClientPortal is created by a post_save receiver, which has no request
+        and therefore no request.user — so it could never be stamped directly,
+        and every auto-created portal came back with created_by_display: "".
+        The actor now rides in on User.created_by, set before the save that
+        fires the signal.
+        """
+        User = get_user_model()
+        onboarded = User.objects.create_user(
+            first_name="Nkem", last_name="Vante", email="attr-onboarded@example.com",
+            password="x", role="client", created_by=self.staff,
+        )
+        self.assertEqual(onboarded.created_by, self.staff)
+        self.assertEqual(onboarded.portal.created_by, self.staff)
+        # Creation is not an edit — neither row claims a last editor.
+        self.assertIsNone(onboarded.last_updated_by)
+        self.assertIsNone(onboarded.portal.last_updated_by)
+
+    def test_self_registration_leaves_attribution_null(self):
+        """No actor, no attribution — create_user without a registrar."""
+        User = get_user_model()
+        alone = User.objects.create_user(
+            first_name="Solo", last_name="Client", email="attr-solo@example.com",
+            password="x", role="client",
+        )
+        self.assertIsNone(alone.created_by)
+        self.assertIsNone(alone.portal.created_by)
 
     def test_update_changes_last_updated_by_but_not_created_by(self):
         event = self._event(created_by=self.staff, last_updated_by=self.staff)
@@ -1449,3 +1490,66 @@ class ScheduleInTests(TestCase):
         background.cancel_timers()
         time.sleep(0.3)
         self.assertEqual(self.calls, [])
+
+
+class EventCatalogueTests(TestCase):
+    """docs/observability/README.md claims to list every `event=` slug the
+    codebase emits, "grep-verified against the source, not aspirational".
+
+    Nothing enforced that claim, and it drifted: six reCAPTCHA events shipped
+    undocumented and therefore unalerted, which is the failure mode the
+    catalogue exists to prevent. A missing entry is not a documentation nit —
+    the README is where an event gets triaged into P1/P2/P3, so an event that
+    never lands in it is one nobody ever decided whether to alert on.
+
+    Forward direction only: emitted-but-undocumented is the drift that actually
+    happens, because adding a logger call and adding a table row are separate
+    edits. The reverse (a stale entry for an event that was deleted) is left
+    unchecked, since the README's backticks also hold filenames, field names and
+    settings keys, and telling those apart from slugs needs a heuristic that
+    would itself go stale.
+    """
+
+    EVENT_LITERAL = re.compile(r'"event"\s*:\s*"([a-z0-9_]+)"')
+    SOURCE_ROOTS = ("apps", "config")
+
+    def _emitted_events(self):
+        """Every slug passed as extra={"event": ...} in application code.
+
+        tests.py is excluded deliberately: a test asserting on an event slug is
+        not an emission, and requiring one to be documented would make this test
+        fire on its own fixtures.
+        """
+        found = {}
+        for root in self.SOURCE_ROOTS:
+            for path in (settings.BASE_DIR / root).rglob("*.py"):
+                if path.name == "tests.py" or "__pycache__" in path.parts:
+                    continue
+                for slug in self.EVENT_LITERAL.findall(path.read_text()):
+                    found.setdefault(slug, path)
+        return found
+
+    def test_every_emitted_event_is_in_the_catalogue(self):
+        readme = settings.BASE_DIR / "docs" / "observability" / "README.md"
+        text = readme.read_text()
+
+        emitted = self._emitted_events()
+        self.assertTrue(emitted, "found no event literals at all — the regex has rotted")
+
+        # Backtick-delimited so `rate_limited` cannot be satisfied by
+        # `admin_login_rate_limited` merely containing it.
+        missing = {
+            slug: path for slug, path in emitted.items() if f"`{slug}`" not in text
+        }
+        self.assertEqual(
+            missing,
+            {},
+            "These events are emitted but absent from docs/observability/README.md, "
+            "so nobody has decided whether they page, notify, or sit on a dashboard. "
+            "Add each to the P1/P2/P3 catalogue (and a rule to "
+            "grafana-alert-rules.yaml if it earns one): "
+            + ", ".join(
+                f"{slug} ({path.relative_to(settings.BASE_DIR)})"
+                for slug, path in sorted(missing.items())
+            ),
+        )

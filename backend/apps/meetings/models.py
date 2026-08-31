@@ -108,7 +108,15 @@ class PrepItemResponse(models.Model):
     Client's response to a single non-file field (checkbox, QA, text).
     """
     field = models.OneToOneField(PrepItemField, on_delete=models.CASCADE, related_name="response")
-    text_value = models.TextField(blank=True)           # for qa, text, checkbox ("true"/"false")
+    text_value = models.TextField(blank=True)           # qa, text — NOT checkbox (see bool_value)
+    # Checkbox answers only. Previously a checkbox stored the STRING "true"/"false"
+    # in text_value, which meant the column accepted any prose at all: the write
+    # path was a byte-for-byte copy of the qa/text branch, and the read path
+    # compared `text_value == "true"` exactly. A client could submit a paragraph
+    # to a required checkbox, get a 200, and leave the field permanently
+    # unanswerable. Nullable because it is meaningless for the other three field
+    # types, which leave it NULL.
+    bool_value = models.BooleanField(null=True, blank=True)
     submitted_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

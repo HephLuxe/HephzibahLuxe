@@ -65,6 +65,40 @@ def _validate_prep_upload(file: UploadedFile) -> None:
     )
 
 
+# Accepted spellings of a checkbox answer. A JSON `true`/`false` is the intended
+# form; the strings are here because multipart/form-data has no boolean type, and
+# the respond endpoint accepts both encodings. Anything outside this map is a 400
+# — a checkbox that silently stored prose is the bug this replaced.
+_CHECKBOX_TRUE = {"true", "1", "yes", "on"}
+_CHECKBOX_FALSE = {"false", "0", "no", "off"}
+
+
+def _parse_checkbox(data: dict) -> bool:
+    """A checkbox answer as a real bool, or ValidationError.
+
+    Reads `bool_value`, falling back to `text_value` for callers still on the old
+    key. Absence is refused rather than defaulted: an unticked box is an explicit
+    `false`, and inferring one from a missing key is how "never answered" and
+    "answered no" become indistinguishable.
+    """
+    for key in ("bool_value", "text_value"):
+        if key in data:
+            value = data[key]
+            break
+    else:
+        raise ValidationError("This field requires a true or false answer.")
+
+    if isinstance(value, bool):
+        return value
+
+    normalised = str(value).strip().lower()
+    if normalised in _CHECKBOX_TRUE:
+        return True
+    if normalised in _CHECKBOX_FALSE:
+        return False
+    raise ValidationError("This field requires a true or false answer.")
+
+
 def submit_field_response(
     field: PrepItemField,
     data: dict,
@@ -121,12 +155,9 @@ def submit_field_response(
         return uploads
 
     elif field.field_type == FieldType.CHECKBOX:
-        text = data.get("text_value", "").strip()
-        if field.is_required and not text:
-            raise ValidationError("This field is required.")
         response, _ = PrepItemResponse.objects.update_or_create(
             field=field,
-            defaults={"text_value": text},
+            defaults={"bool_value": _parse_checkbox(data), "text_value": ""},
         )
         sync_prep_item_completion(field.prep_item)
         return response
@@ -188,7 +219,7 @@ def field_is_answered(field: PrepItemField) -> bool:
 
     response = getattr(field, "response", None)
     if field.field_type == FieldType.CHECKBOX:
-        return response is not None and response.text_value == "true"
+        return response is not None and response.bool_value is True
     # qa, text
     return response is not None and bool(response.text_value.strip())
 

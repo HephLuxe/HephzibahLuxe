@@ -208,6 +208,33 @@ groups:
               expression: QUERY
               conditions:
                 - evaluator: { type: lt, params: [1] }
+      - uid: heph-recaptcha-v2-key
+        title: reCAPTCHA is running with a v2 key, so nothing is being scored
+        condition: THRESHOLD
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Bot protection on the public inquiry form is not enforcing anything"
+          description: "siteverify returned no score field, which means RECAPTCHA_SECRET_KEY belongs to a v2 (checkbox) key rather than a v3 one. Every v3 check is therefore inert: the per-action score threshold is not applied, and neither is the action check that stops a token minted on one form being replayed against another sharing the site key. Submissions are still ACCEPTED (a v2 success really is a solved challenge), so nothing fails and no one complains. Fix: reCAPTCHA console -> the v3 site -> copy the SECRET key into RECAPTCHA_SECRET_KEY and redeploy. This must be zero."
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: QUERY
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: LOKI_DATASOURCE_UID
+            model:
+              refId: QUERY
+              queryType: instant
+              expr: 'sum(count_over_time({service="hephzibah-api"} | json | event=`recaptcha_v2_key_in_use` [600s]))'
+          - refId: THRESHOLD
+            datasourceUid: __expr__
+            model:
+              refId: THRESHOLD
+              type: threshold
+              expression: QUERY
+              conditions:
+                - evaluator: { type: gt, params: [0] }
 
   - orgId: 1
     name: heph-p2-notify
@@ -341,6 +368,60 @@ groups:
               refId: QUERY
               queryType: instant
               expr: 'sum(count_over_time({service="hephzibah-api"} | json | event=`admin_login_account_locked` [3600s]))'
+          - refId: THRESHOLD
+            datasourceUid: __expr__
+            model:
+              refId: THRESHOLD
+              type: threshold
+              expression: QUERY
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+      - uid: heph-recaptcha-unreachable
+        title: reCAPTCHA is failing open - submissions are unfiltered
+        condition: THRESHOLD
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 5 unverified submissions accepted in 30 minutes"
+          description: "verify_recaptcha could not reach Google (network error, timeout, or a non-JSON response) and ALLOWED the submission - the deliberate trade for lead capture, since a wrongly dropped inquiry is unrecoverable and a spam one is not. While this is firing the public inquiry form has no bot filter and only the rate limits are holding. Usually a Google-side blip that clears itself; if it persists, check egress from the host. There is no circuit breaker on this path, so it logs once per submission - hence a burst threshold rather than any-occurrence."
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: QUERY
+            relativeTimeRange: { from: 1800, to: 0 }
+            datasourceUid: LOKI_DATASOURCE_UID
+            model:
+              refId: QUERY
+              queryType: instant
+              expr: 'sum(count_over_time({service="hephzibah-api"} | json | event=`recaptcha_unreachable` [1800s]))'
+          - refId: THRESHOLD
+            datasourceUid: __expr__
+            model:
+              refId: THRESHOLD
+              type: threshold
+              expression: QUERY
+              conditions:
+                - evaluator: { type: gt, params: [5] }
+      - uid: heph-recaptcha-bad-score
+        title: reCAPTCHA returned a score that will not parse
+        condition: THRESHOLD
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "siteverify sent a non-numeric score and the submission was allowed"
+          description: "The response had a score field that is not a float, so the threshold comparison could not run and verify_recaptcha failed OPEN. Against a working v3 key this should be impossible, so one occurrence means the siteverify response shape changed under us rather than a transient fault - fires on any. Check recaptcha_score on the log line for what actually arrived."
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: QUERY
+            relativeTimeRange: { from: 3600, to: 0 }
+            datasourceUid: LOKI_DATASOURCE_UID
+            model:
+              refId: QUERY
+              queryType: instant
+              expr: 'sum(count_over_time({service="hephzibah-api"} | json | event=`recaptcha_bad_score` [3600s]))'
           - refId: THRESHOLD
             datasourceUid: __expr__
             model:

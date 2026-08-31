@@ -21,15 +21,28 @@ class PrepItemFileUploadSerializer(serializers.ModelSerializer):
         fields = ["id", "filename", "file_url", "uploaded_at"]
 
     def get_file_url(self, obj: PrepItemFileUpload) -> str | None:
+        # Falls back to the storage URL when there is no request in context,
+        # matching what DRF's own FileField does. The previous version returned
+        # None instead, and since none of the meetings views pass
+        # context={"request": request}, that made file_url null on EVERY path —
+        # a client could upload an inspiration board and then had no way to
+        # fetch it back. On R2 obj.file.url is already absolute (signed, see
+        # AWS_QUERYSTRING_AUTH in config/settings.py), so build_absolute_uri is
+        # a no-op there and only matters for the relative URLs dev/test storage
+        # produces.
+        if not obj.file:
+            return None
         request = self.context.get("request")
-        if obj.file and request:
-            return request.build_absolute_uri(obj.file.url)
-        return None
+        url = obj.file.url
+        return request.build_absolute_uri(url) if request else url
 
 class PrepItemResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = PrepItemResponse
-        fields = ["id", "text_value", "submitted_at"]
+        # bool_value carries checkbox answers; text_value carries qa/text. Both
+        # are present on every response, and exactly one is meaningful for a
+        # given field_type — the other is "" / null. See PrepItemResponse.
+        fields = ["id", "text_value", "bool_value", "submitted_at"]
 
 
 class PrepItemFieldSerializer(serializers.ModelSerializer):

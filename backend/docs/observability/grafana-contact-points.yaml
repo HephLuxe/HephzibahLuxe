@@ -2,7 +2,41 @@
 # Install BEFORE grafana-alert-rules.yaml; the rules route by these names.
 #
 # Replace NTFY_BASE with your ntfy host, e.g. https://ntfy.example.com
-# Topics match docs/OBSERVABILITY_STANDARD.md: grafana-alerts, glitchtip-issues.
+# Topics match docs/observability/OBSERVABILITY_STANDARD.md: grafana-alerts,
+# glitchtip-issues.
+#
+# ---------------------------------------------------------------------------
+# Two things about this file are easy to get wrong and fail SILENTLY.
+# ---------------------------------------------------------------------------
+#
+# 1. The provisioning key for custom headers is `headers`, NOT `extraHeaders`.
+#    Grafana's UI labels the field "Extra Headers" and its Go struct calls it
+#    ExtraHeaders, but the YAML tag is `headers`. An unrecognised key inside
+#    `settings:` is ignored without error, so a config that looks right sends
+#    no headers at all — which is exactly how this file shipped for its first
+#    revision, promising a priority it never set.
+#
+# 2. Grafana's `webhook` integration ALWAYS posts its own JSON envelope
+#    ({receiver, status, alerts[], commonLabels, ..., title, message}) as
+#    application/json. It has no plain-text mode. ntfy, posted to /<topic>,
+#    treats the body as raw message text — so without templating the phone
+#    shows the entire JSON blob as the notification, and `title:`/`message:`
+#    below never become the ntfy title and message.
+#
+#    `?template=grafana` is ntfy's built-in template for exactly this payload.
+#    It renders title from `.title` (prefixed with an emoji by `.status`, so a
+#    resolve is distinguishable at a glance) and message from `.message`,
+#    truncated to 2000 chars. Which means the `title:` and `message:` settings
+#    below are NOT redundant — they populate the two envelope fields the ntfy
+#    template reads. Removing them empties the notification.
+#
+#    Requires ntfy >= 2.14.0 (pre-defined templates). On an older server use
+#    inline templating instead, which has been in since 2.10.0:
+#      url: NTFY_BASE/grafana-alerts?template=yes&t={{.title}}&m={{.message}}
+#
+# The built-in grafana template sets no `priority` key, so X-Priority below is
+# uncontested and controls the tier on its own.
+
 apiVersion: 1
 
 contactPoints:
@@ -12,10 +46,17 @@ contactPoints:
       - uid: ntfy-critical
         type: webhook
         settings:
-          url: NTFY_BASE/grafana-alerts
+          url: NTFY_BASE/grafana-alerts?template=grafana
           httpMethod: POST
-          # ntfy reads these headers for priority and phone-side treatment.
-          # Priority 5 = the phone rings through Do Not Disturb.
+          # ntfy priority 5 ("max"). NOTE: the header alone does not guarantee
+          # a P1 rings through Do Not Disturb — the ntfy Android app maps
+          # priority onto notification channels, and the channel still needs
+          # the DND override granted in the OS notification settings. Do that
+          # once on the phone that is meant to be woken, then test it with:
+          #   curl -H "X-Priority: 5" -d "test" NTFY_BASE/grafana-alerts
+          headers:
+            X-Priority: "5"
+            X-Tags: "rotating_light"
           title: '[P1] {{ .CommonLabels.alertname }}'
           message: |
             {{ range .Alerts }}{{ .Annotations.summary }}
@@ -28,8 +69,13 @@ contactPoints:
       - uid: ntfy-notify
         type: webhook
         settings:
-          url: NTFY_BASE/grafana-alerts
+          url: NTFY_BASE/grafana-alerts?template=grafana
           httpMethod: POST
+          # 3 is ntfy's default and is stated rather than omitted, so that the
+          # difference from the P1 receiver is visible in a diff.
+          headers:
+            X-Priority: "3"
+            X-Tags: "warning"
           title: '[P2] {{ .CommonLabels.alertname }}'
           message: |
             {{ range .Alerts }}{{ .Annotations.summary }}

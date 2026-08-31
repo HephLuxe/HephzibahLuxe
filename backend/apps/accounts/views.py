@@ -22,6 +22,7 @@ from apps.core.error_codes import (
 )
 from apps.core.pagination import UserPageNumberPagination
 from apps.core.ratelimit import resolve_client_ip
+from apps.core.utils import save_with_attribution
 
 from ..core.permissions import IsStaffOrSuperuser, enforce, is_staff_or_superuser
 from . import login_guard, services
@@ -242,7 +243,7 @@ def register_user(request):
     if not serializer.is_valid():
         return _error("Invalid user data.", VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST, errors=serializer.errors)
 
-    user = serializer.save()
+    user = save_with_attribution(serializer, request.user)
     return Response(
         {
             "detail": "User created successfully. Login credentials sent to user's email.",

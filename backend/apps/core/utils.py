@@ -22,8 +22,15 @@ def _real_actor(user):
 
 def save_with_attribution(serializer, user, **extra):
     """
-    serializer.save(), stamping the acting user: last_updated_by always, plus
-    created_by when this is a create (serializer.instance is None).
+    serializer.save(), stamping the acting user: created_by on a create
+    (serializer.instance is None), last_updated_by on an update. Never both.
+
+    The two are exclusive on purpose. Setting last_updated_by on a create as
+    well — which this used to do — makes "never touched since it was created"
+    and "edited, by the same person who created it" indistinguishable: a
+    brand-new row came back already naming a last editor, which is not true of
+    anything. A NULL last_updated_by now means exactly one thing, and
+    AttributionSerializerMixin renders it as "".
 
     The attribution FKs are editable=False and never appear in serializer
     `fields`, so passing them as save() kwargs sets them straight on the model —
@@ -34,24 +41,27 @@ def save_with_attribution(serializer, user, **extra):
     if _real_actor(user):
         if serializer.instance is None:
             extra.setdefault("created_by", user)
-        extra.setdefault("last_updated_by", user)
+        else:
+            extra.setdefault("last_updated_by", user)
     return serializer.save(**extra)
 
 
 def stamp_attribution(instance, user, *, creating=None):
     """
     Same stamping for service/ORM paths that build an instance directly and then
-    call .save(). `creating` defaults to whether the row is still unsaved.
-    Silently no-ops for models that don't carry the fields, so it's safe to call
-    from shared helpers.
+    call .save(): created_by on a create, last_updated_by on an update, never
+    both (see save_with_attribution for why). `creating` defaults to whether the
+    row is still unsaved. Silently no-ops for models that don't carry the
+    fields, so it's safe to call from shared helpers.
     """
     if not _real_actor(user):
         return instance
     if creating is None:
         creating = instance._state.adding
-    if creating and hasattr(instance, "created_by"):
-        instance.created_by = user
-    if hasattr(instance, "last_updated_by"):
+    if creating:
+        if hasattr(instance, "created_by"):
+            instance.created_by = user
+    elif hasattr(instance, "last_updated_by"):
         instance.last_updated_by = user
     return instance
 

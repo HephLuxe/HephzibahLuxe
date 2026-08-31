@@ -5,6 +5,8 @@ from django.contrib.auth import models as auth_models
 from django.db import models
 from django.utils import timezone
 
+from apps.core.models import AttributedModel
+
 
 class UserRole(models.TextChoices):
     CLIENT = "client", "Client"
@@ -12,7 +14,10 @@ class UserRole(models.TextChoices):
     ADMIN = "admin", "Admin"
 
 class UserManager(auth_models.BaseUserManager):
-    def create_user(self, first_name, last_name, email, password=None, role=UserRole.CLIENT) -> "User":
+    def create_user(
+        self, first_name, last_name, email, password=None,
+        role=UserRole.CLIENT, created_by=None,
+    ) -> "User":
         if not email:
             raise ValueError("User must have an email")
         if not first_name:
@@ -24,6 +29,11 @@ class UserManager(auth_models.BaseUserManager):
         user.first_name = first_name
         user.last_name = last_name
         user.role = role
+        # Set BEFORE the save, not after: User's post_save signal creates the
+        # ClientPortal and copies this across (apps/portal/signals.py). A staff
+        # account registering a client is the only record of who onboarded them,
+        # and stamping it afterwards would leave the portal's created_by NULL.
+        user.created_by = created_by
         user.set_password(password)
         user.is_active = True
         user.save()
@@ -40,7 +50,11 @@ class UserManager(auth_models.BaseUserManager):
             role=UserRole.ADMIN,
         )
 
-class User(auth_models.AbstractUser):
+class User(AttributedModel, auth_models.AbstractUser):
+    # AttributedModel gives created_by / last_updated_by, self-referential here:
+    # the staff account that registered this user. Nothing recorded that before,
+    # so "who onboarded this client" was unanswerable — and the ClientPortal the
+    # post_save signal creates had no actor to inherit either.
     first_name = models.CharField(verbose_name="First Name", max_length=255)
     last_name = models.CharField(verbose_name="Last Name", max_length=255)
     email = models.EmailField(verbose_name="Email", max_length=255, unique=True)
@@ -140,6 +154,13 @@ class User(auth_models.AbstractUser):
     FAILED_LOGIN_WINDOW = timedelta(hours=24)
 
     objects = UserManager()
+
+    # Declared explicitly because AttributedModel comes first in the MRO, and
+    # its (empty, abstract) Meta would otherwise shadow AbstractUser's —
+    # silently dropping verbose_name/verbose_name_plural. Inheriting
+    # AbstractUser.Meta keeps them; Django resets `abstract` to False for us.
+    class Meta(auth_models.AbstractUser.Meta):
+        pass
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["first_name", "last_name"]

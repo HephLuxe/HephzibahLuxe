@@ -13,7 +13,15 @@ logger = logging.getLogger(__name__)
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
 def create_client_portal(sender, instance, created, **kwargs):
     if instance.role == "client":
-        ClientPortal.objects.get_or_create(user=instance)
+        # A post_save receiver has no request, so there is no request.user to
+        # stamp — which is why every auto-created portal used to come back with
+        # created_by_display: "". The actor is inherited from the user row
+        # instead: whoever registered the client also created their portal, and
+        # UserManager.create_user sets User.created_by before this fires.
+        ClientPortal.objects.get_or_create(
+            user=instance,
+            defaults={"created_by": instance.created_by},
+        )
 
 
 @receiver(post_save, sender=ClientPortal)
