@@ -121,7 +121,7 @@
 
 "use client";
 
-import ScrollReveal from "@/components/ui/ScrollReveal";
+import ScrollRevealSlider from "@/components/ui/ScrollRevealSlider";
 
 const transformations = [
     {
@@ -180,7 +180,7 @@ function Transformation({ item }: TransformationProps) {
                                 {item.subtitle}
                             </h3>
                             <div className="lg:hidden mb-10 sm:mb-12 md:mb-14">
-                                <ScrollReveal beforeImg={item.beforeImg} afterImg={item.afterImg} />
+                                <ScrollRevealSlider beforeImg={item.beforeImg} afterImg={item.afterImg} />
                             </div>
                             <h2 className="font-display font-thin text-primary text-center mb-8 sm:mb-10 md:mb-10 lg:mb-10 xl:mb-12 text-[44px] leading-[1.05] sm:text-[56px] sm:leading-[1.05] md:text-[72px] md:leading-[1.05] lg:text-[92px] lg:leading-[92px] xl:text-[108px] xl:leading-[108px] 2xl:text-[124px] 2xl:leading-[124px]">
                                 {item.title.split("\n").map((line, i) => (
@@ -194,7 +194,7 @@ function Transformation({ item }: TransformationProps) {
                             </p>
                         </div>
                         <div className={`hidden lg:block lg:col-span-4 ${item.sliderOnRight ? "lg:order-2" : "lg:order-1"}`}>
-                            <ScrollReveal beforeImg={item.beforeImg} afterImg={item.afterImg} />
+                            <ScrollRevealSlider beforeImg={item.beforeImg} afterImg={item.afterImg} />
                         </div>
                     </div>
                 </div>
