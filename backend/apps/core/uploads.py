@@ -57,6 +57,7 @@ a worse error for the same refusal.
 
 from __future__ import annotations
 
+from django.core.files.uploadedfile import UploadedFile
 from rest_framework.exceptions import ValidationError
 
 MB = 1024 * 1024
@@ -75,6 +76,52 @@ MAX_DOCUMENT_SIZE = 25 * MB
 
 IMAGE_TYPES = ("image/jpeg", "image/png", "image/webp")
 DOCUMENT_TYPES = ("application/pdf", *IMAGE_TYPES)
+
+
+# ── Content signatures ───────────────────────────────────────────────────────
+#
+# The type check reads the file's own leading bytes, NOT the Content-Type the
+# caller attached to the multipart part. See docs/adr/0003-upload-type-validation.md.
+#
+# `UploadedFile.content_type` is copied verbatim out of the request, so trusting
+# it was wrong in both directions. Honest clients that do not maintain an
+# extension->MIME table send `application/octet-stream` for a perfectly good PDF
+# (curl -F without an explicit type, several mobile pickers, Postman when its
+# file reference goes stale) and were refused with a message telling them the
+# file was the wrong type when it was not. Meanwhile anyone could label anything
+# `application/pdf` and have it stored unread.
+#
+# Twelve bytes discriminate all four accepted formats. This is a storage-cost
+# and obvious-mistake gate, not a malware scanner: `%PDF-` followed by garbage
+# still passes, and that is the documented trade.
+
+_SIGNATURE_PROBE_BYTES = 12
+
+_MAGIC_PREFIXES = (
+    ("application/pdf", b"%PDF-"),
+    ("image/jpeg", b"\xff\xd8\xff"),
+    ("image/png", b"\x89PNG\r\n\x1a\n"),
+)
+
+
+def _sniff_upload_type(upload: UploadedFile) -> str | None:
+    """The MIME type an upload's own bytes claim, or None if nothing matches.
+
+    Leaves the handle rewound to 0. The storage backend writes from wherever the
+    cursor is left, so skipping the rewind would put a truncated object in R2 —
+    the read is invisible in tests that never inspect the stored bytes.
+    """
+    upload.seek(0)
+    head = upload.read(_SIGNATURE_PROBE_BYTES)
+    upload.seek(0)
+
+    for mime, prefix in _MAGIC_PREFIXES:
+        if head.startswith(prefix):
+            return mime
+    # WEBP is the odd one out — "RIFF", four bytes of length, then "WEBP".
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "image/webp"
+    return None
 
 
 def _human(size: int) -> str:
@@ -99,18 +146,33 @@ def validate_upload(
     the standard envelope. Django's identically-named exception would come back
     as a 500.
 
-    Both checks are skipped when the attribute is missing rather than assumed
-    hostile. ``content_type`` is absent on a file that came from storage instead
-    of a multipart POST, and refusing those would break every partial update that
-    happens to include an untouched file field.
+    The type check runs on the file's leading bytes (``_sniff_upload_type``) and
+    ignores the declared ``content_type`` entirely, so a correctly-formed file is
+    accepted however the caller labelled it and a mislabelled one is refused on
+    what it actually contains.
+
+    Only a freshly POSTed ``UploadedFile`` is sniffed. A ``FieldFile`` handed
+    back on a partial update is already in storage, and reading it would mean a
+    round trip to R2 on every PATCH that leaves a file field untouched — to
+    re-validate bytes that were checked on the way in. Both checks are likewise
+    skipped for an empty value, since clearing a field is not an upload.
     """
     if not value:
         return value
 
-    content_type = getattr(value, "content_type", None)
-    if content_type and content_type not in allowed_types:
-        readable = ", ".join(t.split("/")[-1].upper() for t in allowed_types)
-        raise ValidationError(f"{label} must be one of: {readable}.")
+    if isinstance(value, UploadedFile):
+        permitted = ", ".join(t.split("/")[-1].upper() for t in allowed_types)
+        actual = _sniff_upload_type(value)
+        if actual is None:
+            raise ValidationError(f"{label} must be one of: {permitted}.")
+        if actual not in allowed_types:
+            # Name what it really is — the old message could only repeat the
+            # whitelist back, which is useless when the caller believes they
+            # already sent one of those.
+            raise ValidationError(
+                f"{label} is a {actual.split('/')[-1].upper()}; "
+                f"must be one of: {permitted}."
+            )
 
     size = getattr(value, "size", None)
     if size is not None and size > max_size:

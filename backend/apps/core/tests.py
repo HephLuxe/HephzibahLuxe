@@ -11,6 +11,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
+from django.core.files.base import File
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import models
 from django.test import TestCase, override_settings
@@ -620,14 +621,27 @@ class UploadCeilingTests(TestCase):
     is a perfectly valid image.
     """
 
+    # Real leading bytes per format. The validator sniffs content now, so a
+    # stand-in of b"x" would be refused as "no recognised signature" and every
+    # size assertion below would pass for the wrong reason.
+    MAGIC = {
+        "application/pdf": b"%PDF-1.4\n",
+        "image/jpeg": b"\xff\xd8\xff\xe0\x00\x10JFIF",
+        "image/png": b"\x89PNG\r\n\x1a\n",
+        "image/webp": b"RIFF\x24\x00\x00\x00WEBP",
+        "application/x-msdownload": b"MZ\x90\x00",
+    }
+
     def _upload(self, *, size, content_type="image/jpeg", name="photo.jpg"):
         """A file that claims a size without allocating it.
 
         SimpleUploadedFile derives .size from its content, so a genuine 26MB
         fixture would mean holding 26MB per assertion for no benefit — the
-        validator reads the attribute, it does not measure the bytes.
+        validator reads the size attribute, it does not measure the bytes. The
+        CONTENT still has to be right, though: the type half reads the first
+        twelve bytes.
         """
-        f = SimpleUploadedFile(name, b"x", content_type=content_type)
+        f = SimpleUploadedFile(name, self.MAGIC[content_type], content_type=content_type)
         f.size = size
         return f
 
@@ -665,14 +679,68 @@ class UploadCeilingTests(TestCase):
         pdf = self._upload(size=1024, content_type="application/pdf", name="contract.pdf")
         self.assertIs(validate_document(pdf), pdf)
 
-    def test_a_file_with_no_content_type_is_let_through(self):
-        """Absent rather than hostile. A file loaded from storage on a partial
-        update carries no content_type, and refusing those would break every
-        PATCH that happens to include an untouched file field."""
-        stored = SimpleUploadedFile("photo.jpg", b"x")
-        stored.content_type = None
+    def test_a_file_already_in_storage_is_let_through(self):
+        """Not an upload, so not sniffed.
+
+        A partial update that leaves a file field untouched hands the validator
+        the stored File rather than an UploadedFile. Reading it would mean a
+        round trip to R2 on every such PATCH, to re-check bytes that were
+        validated on the way in — so it is skipped on type, by class rather than
+        by a missing attribute.
+        """
+        stored = File(io.BytesIO(b"not a signature"), name="photo.jpg")
         stored.size = 1024
         self.assertIs(validate_photo(stored), stored)
+
+    # ── the type check reads bytes, not the declared header ─────────────
+
+    def test_a_real_pdf_is_accepted_however_the_caller_labelled_it(self):
+        """The false-rejection this replaced.
+
+        `application/octet-stream` is the documented fallback for any sender
+        without an extension->MIME table — curl -F, several mobile pickers,
+        Postman with a stale file reference. Those uploads were refused with a
+        message insisting the file was the wrong type when it was not, and the
+        caller had no way to act on it.
+        """
+        honest = SimpleUploadedFile(
+            "contract.pdf", b"%PDF-1.7\nbody", content_type="application/octet-stream",
+        )
+        self.assertIs(validate_document(honest), honest)
+
+    def test_a_mislabelled_file_is_refused_on_its_contents(self):
+        """The false-acceptance. The header is caller-chosen, so claiming
+        application/pdf used to be enough to have anything stored unread."""
+        with self.assertRaises(DRFValidationError):
+            validate_document(SimpleUploadedFile(
+                "payload.pdf", b"MZ\x90\x00executable", content_type="application/pdf",
+            ))
+
+    def test_the_message_names_the_type_it_actually_found(self):
+        """Repeating the whitelist is useless to someone who believes they
+        already sent one of those."""
+        with self.assertRaises(DRFValidationError) as caught:
+            validate_image(SimpleUploadedFile(
+                "scan.png", b"%PDF-1.4 really a pdf", content_type="image/png",
+            ))
+        self.assertIn("PDF", str(caught.exception))
+
+    def test_every_accepted_format_is_recognised_by_signature(self):
+        """Each of the four, or the gate silently narrows to whatever is tested."""
+        for content_type in uploads.DOCUMENT_TYPES:
+            with self.subTest(content_type=content_type):
+                f = SimpleUploadedFile(
+                    "f", self.MAGIC[content_type], content_type="application/octet-stream",
+                )
+                self.assertIs(validate_document(f), f)
+
+    def test_the_handle_is_rewound_after_sniffing(self):
+        """The storage backend writes from wherever the cursor is left, so a
+        probe that does not rewind puts a TRUNCATED object in R2 — invisible to
+        any test that only checks the upload was accepted."""
+        f = SimpleUploadedFile("a.pdf", b"%PDF-1.4 full body here", content_type="application/pdf")
+        validate_document(f)
+        self.assertEqual(f.read(), b"%PDF-1.4 full body here")
 
     def test_an_empty_value_is_let_through(self):
         """Clearing a field is not an upload."""
@@ -764,7 +832,7 @@ class UploadCeilingIsWiredToSerializersTests(TestCase):
     def test_client_document_file_is_capped(self):
         """A FileField, so nothing else was checking it at all — not size, not
         type. This is the field a signed contract lands on."""
-        oversized = SimpleUploadedFile("deck.pdf", b"x", content_type="application/pdf")
+        oversized = SimpleUploadedFile("deck.pdf", b"%PDF-1.4\n", content_type="application/pdf")
         oversized.size = uploads.MAX_DOCUMENT_SIZE + 1
         serializer = ClientDocumentSerializer(data={"file": oversized}, partial=True)
         self.assertFalse(serializer.is_valid())

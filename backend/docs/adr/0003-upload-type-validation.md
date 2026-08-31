@@ -1,6 +1,6 @@
 # ADR-0003 — Validate upload type by content signature, not the declared `Content-Type`
 
-**Status:** Proposed
+**Status:** Accepted, implemented
 **Date:** 2026-08-31
 **Related:** `apps/core/uploads.py`, `apps/meetings/services.py`, `apps/document_hub/`, `apps/contacts/`, `apps/events/`
 
