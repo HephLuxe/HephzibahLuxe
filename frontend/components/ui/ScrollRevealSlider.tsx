@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useLenis } from "lenis/react";
 
 interface ScrollRevealSliderProps {
   beforeImg: string;
@@ -11,10 +12,8 @@ export default function ScrollRevealSlider({ beforeImg, afterImg }: ScrollReveal
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const [scrollProgress, setScrollProgress] = useState(0);
-  // Shifts the scroll-driven position so a manual drag becomes the new
-  // baseline instead of snapping back to the raw scroll fraction on release.
-  const [offset, setOffset] = useState(0);
   const [dragPosition, setDragPosition] = useState<number | null>(null);
+  const lenis = useLenis();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -45,12 +44,31 @@ export default function ScrollRevealSlider({ beforeImg, afterImg }: ScrollReveal
     };
   }, []);
 
-  // While dragging, follow the pointer directly. Otherwise follow scroll,
-  // shifted by whatever offset the last drag left behind.
-  const position =
-    dragPosition !== null
-      ? dragPosition
-      : Math.max(0, Math.min(100, scrollProgress * 100 + offset));
+  // While dragging, follow the pointer directly; otherwise follow scroll.
+  const position = dragPosition !== null ? dragPosition : scrollProgress * 100;
+
+  // Moves the real page scroll to wherever the given handle percentage
+  // corresponds to, so scrolling afterwards continues from that point
+  // instead of jumping back to the pre-drag scroll position.
+  const syncScrollToPosition = (percentage: number) => {
+    const pinContainer = containerRef.current?.closest("[data-scroll-pin]") as HTMLElement | null;
+    if (!pinContainer) return;
+
+    const pinRect = pinContainer.getBoundingClientRect();
+    const pinHeight = pinContainer.offsetHeight;
+    const viewportHeight = window.innerHeight;
+    const scrollableDistance = pinHeight - viewportHeight;
+    if (scrollableDistance <= 0) return;
+
+    const absoluteTop = window.scrollY + pinRect.top;
+    const targetScrollY = absoluteTop + (percentage / 100) * scrollableDistance;
+
+    if (lenis) {
+      lenis.scrollTo(targetScrollY, { immediate: true });
+    } else {
+      window.scrollTo({ top: targetScrollY });
+    }
+  };
 
   const handleMove = (clientX: number) => {
     if (!containerRef.current || !isDragging.current) return;
@@ -58,6 +76,7 @@ export default function ScrollRevealSlider({ beforeImg, afterImg }: ScrollReveal
     const x = clientX - rect.left;
     const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
     setDragPosition(percentage);
+    syncScrollToPosition(percentage);
   };
 
   const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => {
@@ -70,9 +89,6 @@ export default function ScrollRevealSlider({ beforeImg, afterImg }: ScrollReveal
     if (!isDragging.current) return;
     isDragging.current = false;
     document.body.style.cursor = "default";
-    if (dragPosition !== null) {
-      setOffset(dragPosition - scrollProgress * 100);
-    }
     setDragPosition(null);
   };
 
