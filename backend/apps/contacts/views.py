@@ -283,8 +283,8 @@ def copy_contacts_from_day(request, event_slug):
             phone=contact.phone,
             email=contact.email,
             preferred_method=contact.preferred_method,
+            # created_by only — a copied contact is a new row, not an edit.
             created_by=request.user,
-            last_updated_by=request.user,
         )
         if contact.photo:
             # Duplicate the actual file bytes onto the new contact's own photo

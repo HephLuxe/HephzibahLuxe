@@ -183,6 +183,14 @@ client-facing single-item GET, since the aggregate already returns every file
 URL needed for View/Download. Writes (create/edit/delete documents, payment
 schedule, milestones, invoices, receipts) are staff-only.
 
+Every document key in that response is a **list**, `service_agreements` and
+`quotations` included. Those two were singular (`.first()`) until a revised
+quotation went up and the hub showed only the newer one — the write path has
+always allowed several per engagement and numbers them `C001`/`C002`,
+`Q001`/`Q002`, so the read path was the half that was wrong. Each list is
+ordered newest-first (`Meta.ordering = ["order", "-created_at"]`); a frontend
+that only wants the current quotation takes `quotations[0]`.
+
 ## Tests
 `python manage.py test document_hub` — empty-state shape, staff create →
 client read, permission denial, reference-code validation, payment-schedule
@@ -213,8 +221,9 @@ tiles + next-payment-due derivation, mark-paid.
   future event's paperwork). `reference_code` is read-only — a client-supplied
   value is ignored, not rejected.
 - **There's no per-category uniqueness.** Two Service Agreements on one
-  engagement is allowed and yields `C001`, `C002`. Only the *seeding* path skips
-  a category the engagement already has.
+  engagement is allowed and yields `C001`, `C002`, and `GET /document-hub/`
+  returns both in `service_agreements` — same for `quotations`. Only the
+  *seeding* path skips a category the engagement already has.
 - **Deleting a payment schedule is gated twice.** `?confirm=true` is required
   when milestones exist, and a schedule with any **paid** milestone is refused
   outright — that's a payment record, not a draft. Clear or unmark those first.

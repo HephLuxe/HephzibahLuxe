@@ -54,9 +54,10 @@ def budget_create(request, event_slug):
     if total_budget is None:
         return _error("total_budget must be a valid number.", VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST)
 
+    # created_by only — creating is not editing. See core.utils.
     budget = EventBudget.objects.create(
         event=event, total_budget=total_budget,
-        created_by=request.user, last_updated_by=request.user,
+        created_by=request.user,
     )
     serializer = EventBudgetOverviewSerializer(budget)
     return Response(serializer.data, status=status.HTTP_201_CREATED)

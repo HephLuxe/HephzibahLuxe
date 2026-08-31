@@ -129,8 +129,8 @@ def get_hub(request: Request) -> Response:
 
     hub = services.build_hub(portal.active_engagement)
     return Response({
-        "service_agreement": ClientDocumentSerializer(hub["service_agreement"]).data if hub["service_agreement"] else None,
-        "quotation": ClientDocumentSerializer(hub["quotation"]).data if hub["quotation"] else None,
+        "service_agreements": ClientDocumentSerializer(hub["service_agreements"], many=True).data,
+        "quotations": ClientDocumentSerializer(hub["quotations"], many=True).data,
         "welcome_service_info": ClientDocumentSerializer(hub["welcome_service_info"], many=True).data,
         "payment_schedule": PaymentScheduleSerializer(hub["payment_schedule"]).data if hub["payment_schedule"] else None,
         "invoices": InvoiceSerializer(hub["invoices"], many=True).data,
@@ -229,9 +229,10 @@ def create_payment_schedule(request: Request) -> Response:
         return _error("total_investment must be a valid number.", VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST)
 
     with transaction.atomic():
+        # created_by only — creating is not editing. See core.utils.
         schedule = PaymentSchedule.objects.create(
             engagement=engagement, total_investment=total_investment,
-            created_by=request.user, last_updated_by=request.user,
+            created_by=request.user,
         )
         # A new schedule is born with the default 30/40/30 contract split — the
         # amounts are derived from total_investment (services.generate_milestones).

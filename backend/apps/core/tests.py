@@ -1,5 +1,6 @@
 import datetime
 import io
+import pathlib
 import re
 import threading
 import time
@@ -241,6 +242,42 @@ class AttributionTests(TestCase):
         User = get_user_model()
         nameless = User(first_name="", last_name="", email="ops@example.com")
         self.assertEqual(user_display_name(nameless), "ops@example.com")
+
+    def test_no_code_outside_the_helpers_assigns_last_updated_by(self):
+        """The regression guard, and the reason it is worth more than the rest.
+
+        Fixing save_with_attribution/stamp_attribution fixed every path that
+        GOES THROUGH them — and four call sites did not. They built rows with
+        `objects.create(created_by=user, last_updated_by=user)` directly, so a
+        freshly created payment schedule, budget, reminder or copied contact
+        still came back naming a last editor. Nothing failed; the helper fix
+        simply did not reach them, which is invisible without a scan like this.
+
+        If a genuine bulk update ever needs to set the field directly, add it to
+        ALLOWED with a note — the point is that it becomes a decision.
+        """
+        import ast
+
+        ALLOWED = {"apps/core/utils.py"}
+        apps_root = pathlib.Path(settings.BASE_DIR) / "apps"
+        offenders = []
+
+        for path in sorted(apps_root.rglob("*.py")):
+            relative = path.relative_to(settings.BASE_DIR).as_posix()
+            if "migrations" in path.parts or path.name == "tests.py" or relative in ALLOWED:
+                continue
+            for node in ast.walk(ast.parse(path.read_text())):
+                if isinstance(node, ast.Call) and any(
+                    kw.arg == "last_updated_by" for kw in node.keywords
+                ):
+                    offenders.append(f"{relative}:{node.lineno}")
+
+        self.assertEqual(
+            offenders, [],
+            "last_updated_by is assigned outside core.utils at: "
+            f"{', '.join(offenders)}. Creating is not editing — pass created_by "
+            "only, and let save_with_attribution/stamp_attribution handle edits.",
+        )
 
 
 # ═════════════════════════════════════════════════════════════════════════════

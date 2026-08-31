@@ -95,10 +95,10 @@ def create_reminder(engagement, created_by, validated_data: dict) -> Reminder:
     target_id = fields.pop("target_id", None)
     _apply_target(fields, engagement, target_type, target_id)
 
+    # created_by only — creating is not editing. See core.utils.
     reminder = Reminder.objects.create(
         engagement=engagement,
         created_by=created_by,
-        last_updated_by=created_by,
         **fields,
     )
 

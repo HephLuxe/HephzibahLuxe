@@ -80,9 +80,15 @@ def generate_milestones(schedule, split: list[tuple[str, Decimal]] | None = None
 
     schedule.milestones.all().delete()
     amounts = _amounts_from_split(schedule.total_investment, [pct for _, pct in split])
+    # Inherit the schedule's creator. These rows are generated, never typed, so
+    # there is no request.user at this layer — and left unstamped they came back
+    # with an empty created_by_display, which reads as "nobody made this" for
+    # rows that plainly had an author. Same inheritance the auto-created
+    # ClientPortal uses (apps/portal/signals.py).
     PaymentMilestone.objects.bulk_create([
         PaymentMilestone(
             schedule=schedule, label=label, percentage=Decimal(str(pct)), amount=amt, order=i,
+            created_by=schedule.created_by,
         )
         for i, ((label, pct), amt) in enumerate(zip(split, amounts))
     ])
@@ -110,13 +116,22 @@ def recompute_milestone_amounts(schedule) -> None:
 def build_hub(engagement) -> dict:
     """
     Assemble the full "HL Client Document Hub" page in one shape:
-    service agreement, quotation, welcome/service PDFs, payment overview
+    service agreements, quotations, welcome/service PDFs, payment overview
     (schedule may be absent if staff hasn't set one up yet), invoices, receipts.
+
+    The two signable categories are LISTS, like every other collection here.
+    They were singular (`.first()`) until a staff member uploaded a revised
+    quotation and the hub silently showed only one of the two — the write path
+    has always allowed several per engagement, and `next_reference_code` numbers
+    them C001/C002, Q001/Q002 for exactly that reason. A revision is the normal
+    case for a quotation, so the read path now matches: every one is returned,
+    newest first (Meta.ordering is ["order", "-created_at"]), and the client
+    decides what to show.
     """
     if engagement is None:
         return {
-            "service_agreement": None,
-            "quotation": None,
+            "service_agreements": [],
+            "quotations": [],
             "welcome_service_info": [],
             "payment_schedule": None,
             "invoices": [],
@@ -126,8 +141,10 @@ def build_hub(engagement) -> dict:
     documents = engagement.client_documents.all()
 
     return {
-        "service_agreement": documents.filter(category=ClientDocumentCategory.SVC_AGREEMENT).first(),
-        "quotation": documents.filter(category=ClientDocumentCategory.QUOTATION).first(),
+        "service_agreements": list(
+            documents.filter(category=ClientDocumentCategory.SVC_AGREEMENT)
+        ),
+        "quotations": list(documents.filter(category=ClientDocumentCategory.QUOTATION)),
         "welcome_service_info": list(
             documents.exclude(
                 category__in=[ClientDocumentCategory.SVC_AGREEMENT, ClientDocumentCategory.QUOTATION]

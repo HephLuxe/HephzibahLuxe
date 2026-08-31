@@ -50,8 +50,8 @@ class DocumentHubTests(TestCase):
         force_authenticate(req, user=self.client_user)
         r = views.get_hub(req)
         self.assertEqual(r.status_code, 200)
-        self.assertIsNone(r.data["service_agreement"])
-        self.assertIsNone(r.data["quotation"])
+        self.assertEqual(r.data["service_agreements"], [])
+        self.assertEqual(r.data["quotations"], [])
         self.assertEqual(r.data["welcome_service_info"], [])
         self.assertIsNone(r.data["payment_schedule"])
         self.assertEqual(r.data["invoices"], [])
@@ -79,8 +79,39 @@ class DocumentHubTests(TestCase):
         r = views.get_hub(req)
         # System-generated: HL-<II><CODE><NNN>-C001. This engagement is a Wedding
         # for Priscilla & Samuel, so the segment is PSW### (P+S+W).
-        self.assertRegex(r.data["service_agreement"]["reference_code"], r"^HL-PSW\d{3}-C001$")
-        self.assertIsNone(r.data["quotation"])
+        self.assertRegex(r.data["service_agreements"][0]["reference_code"], r"^HL-PSW\d{3}-C001$")
+        self.assertEqual(r.data["quotations"], [])
+
+    def test_every_quotation_is_returned_not_just_the_latest(self):
+        # The regression this guards: the hub used to expose `quotation` as a
+        # single `.first()`, so uploading a revised quotation hid the original
+        # from the client entirely — while `next_reference_code` had already
+        # numbered it Q002, proving Q001 was still there. A revised quotation is
+        # the normal case, not an edge one.
+        for n in range(2):
+            req = self.factory.post(
+                "/api/v1/document-hub/documents/",
+                {
+                    "portal_id": str(self.portal.id),
+                    "category": ClientDocumentCategory.QUOTATION,
+                    "title": f"Service Quotation {n + 1}",
+                    "file": _dummy_file(f"quote{n + 1}.pdf"),
+                },
+                format="multipart",
+            )
+            force_authenticate(req, user=self.staff)
+            self.assertEqual(views.create_document(req).status_code, 201)
+
+        req = self.factory.get("/api/v1/document-hub/")
+        force_authenticate(req, user=self.client_user)
+        r = views.get_hub(req)
+
+        codes = [q["reference_code"] for q in r.data["quotations"]]
+        self.assertEqual(len(codes), 2)
+        # Meta.ordering is ["order", "-created_at"] and both rows default to
+        # order=0, so the newest revision leads.
+        self.assertRegex(codes[0], r"^HL-PSW\d{3}-Q002$")
+        self.assertRegex(codes[1], r"^HL-PSW\d{3}-Q001$")
 
     def test_client_cannot_create_document(self):
         req = self.factory.post(
