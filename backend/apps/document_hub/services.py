@@ -188,10 +188,16 @@ def derive_milestone_status(milestone: PaymentMilestone) -> str:
     return PaymentMilestoneStatus.PART_PAID
 
 
-def sync_milestone_from_invoices(milestone: PaymentMilestone) -> PaymentMilestone:
+def sync_milestone_from_invoices(milestone: PaymentMilestone, notify: bool = True) -> PaymentMilestone:
     """
     Re-derive one milestone's `amount_paid` / `status` / `paid_on` from its paid
     invoices, and email the client if it just became fully paid.
+
+    `notify=False` is for REPAIR paths (resync_payment_schedules), where the
+    transition being detected happened days ago in the invoice record and is
+    only now being written to the milestone. Emailing there would tell a client
+    their payment cleared today because staff fixed a data drift, which is both
+    wrong and impossible to retract.
 
     Recomputes from the full set rather than adding a delta, which makes it
     idempotent: unpaying an invoice, deleting one, editing an amount and
@@ -228,7 +234,7 @@ def sync_milestone_from_invoices(milestone: PaymentMilestone) -> PaymentMileston
     # Only on the pending/part-paid -> paid EDGE. Without that guard, editing an
     # unrelated field on an already-paid invoice would re-email the client that
     # the same milestone had been paid.
-    if not was_paid and milestone.status == PaymentMilestoneStatus.PAID:
+    if notify and not was_paid and milestone.status == PaymentMilestoneStatus.PAID:
         notify_milestone_paid(milestone)
     return milestone
 
