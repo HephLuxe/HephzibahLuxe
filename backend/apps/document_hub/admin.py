@@ -120,10 +120,16 @@ class PaymentMilestoneInline(admin.TabularInline):
     model = PaymentMilestone
     formset = PaymentMilestoneInlineFormSet
     extra = 0
-    fields = ("label", "percentage", "amount", "due_date", "status", "paid_on", "order")
+    fields = ("label", "percentage", "amount", "amount_paid", "due_date", "status", "paid_on", "order")
     # amount is derived from percentage x total_investment (recomputed in
     # save_related), so staff set the percentage, not the amount, here.
-    readonly_fields = ("amount",)
+    #
+    # amount_paid/status/paid_on are derived from the milestone's INVOICES
+    # (services.sync_milestone_from_invoices) — editing them here would be
+    # overwritten by the next invoice change and would put the two records into
+    # silent disagreement. Mark the invoice paid instead; for a milestone with
+    # no invoice, use the "Mark selected milestones as paid" action.
+    readonly_fields = ("amount", "amount_paid", "status", "paid_on")
 
 
 @admin.register(PaymentSchedule)
@@ -154,7 +160,8 @@ class PaymentScheduleAdmin(admin.ModelAdmin):
 
 @admin.register(PaymentMilestone)
 class PaymentMilestoneAdmin(admin.ModelAdmin):
-    list_display = ("label", "schedule", "amount", "due_date", "status", "paid_on", "order")
+    list_display = ("label", "schedule", "amount", "amount_paid", "balance", "due_date", "status", "paid_on", "order")
+    readonly_fields = ("amount_paid", "status", "paid_on")
     list_filter = ("status",)
     search_fields = ("label", "schedule__engagement__portal__user__email")
     raw_id_fields = ("schedule",)
@@ -170,18 +177,44 @@ class PaymentMilestoneAdmin(admin.ModelAdmin):
 
 @admin.register(Invoice)
 class InvoiceAdmin(AttributionAdminMixin, admin.ModelAdmin):
-    list_display = ("invoice_number", "engagement", "issued_on", "due_on", "amount", "status", "created_by_display", "last_updated_by_display")
+    list_display = ("invoice_number", "engagement", "milestone", "issued_on", "due_on", "amount", "status", "created_by_display", "last_updated_by_display")
     list_filter = ("status",)
     search_fields = ("invoice_number",)
-    raw_id_fields = ("engagement",)
+    raw_id_fields = ("engagement", "milestone")
     # invoice_number is system-generated (pre_save signal) — filled on save.
     readonly_fields = ("invoice_number", *ATTRIBUTION_FIELDS)
     actions = ["mark_as_paid"]
 
+    def save_model(self, request, obj, form, change):
+        """Push the saved state onto the linked milestone, same as the API does."""
+        super().save_model(request, obj, form, change)
+        services.sync_invoice_milestone(obj)
+
+    def delete_model(self, request, obj):
+        milestone = obj.milestone
+        super().delete_model(request, obj)
+        if milestone is not None:
+            services.sync_milestone_from_invoices(milestone)
+
     @admin.action(description="Mark selected invoices as paid")
     def mark_as_paid(self, request, queryset):
+        """Row-by-row, NOT queryset.update().
+
+        A bulk UPDATE writes the status column and returns — it fires no signal
+        and calls no service, so the linked milestones would stay pending and
+        the Payment Overview would not move. That is exactly the class of bug
+        this whole feature exists to fix, so it must not be reintroduced by the
+        admin.
+        """
         from .models import InvoiceStatus
-        updated = queryset.update(status=InvoiceStatus.PAID)
+
+        updated = 0
+        for invoice in queryset:
+            if invoice.status != InvoiceStatus.PAID:
+                invoice.status = InvoiceStatus.PAID
+                invoice.save(update_fields=["status", "updated_at"])
+            services.sync_invoice_milestone(invoice)
+            updated += 1
         self.message_user(request, f"Marked {updated} invoice(s) as paid.")
 
 

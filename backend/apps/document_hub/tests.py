@@ -141,62 +141,196 @@ class DocumentHubTests(TestCase):
         self.assertEqual(r.status_code, 201)
         self.assertRegex(r.data["reference_code"], r"^HL-PSW\d{3}-C001$")
 
-    def test_payment_schedule_tiles_and_next_payment_due(self):
+    def _schedule(self, total="7000000"):
+        """Create a schedule through the API and return (id, its invoices by label)."""
         req = self.factory.post(
             "/api/v1/document-hub/payment-schedule/",
-            {"portal_id": str(self.portal.id), "total_investment": "7000000"},
+            {"portal_id": str(self.portal.id), "total_investment": total},
             format="json",
         )
         force_authenticate(req, user=self.staff)
         r = views.create_payment_schedule(req)
         self.assertEqual(r.status_code, 201)
-        schedule_id = r.data["id"]
+        schedule = PaymentSchedule.objects.get(id=r.data["id"])
+        return schedule, {inv.milestone.label: inv for inv in schedule.engagement.invoices.all()}
 
-        for label, amount, due, status_ in [
-            ("Deposit", "3000000", "2026-05-06", "paid"),
-            ("Phase 2", "1500000", "2026-06-07", "paid"),
-            ("Final Payment", "2500000", "2026-07-06", "pending"),
-        ]:
-            req = self.factory.post(
-                f"/api/v1/document-hub/payment-schedule/{schedule_id}/milestones/",
-                {"label": label, "amount": amount, "due_date": due, "status": status_},
-                format="json",
-            )
-            force_authenticate(req, user=self.staff)
-            self.assertEqual(views.add_milestone(req, schedule_id=schedule_id).status_code, 201)
+    def _pay(self, invoice, amount=None):
+        """Flip an invoice to paid through the API — the path staff actually use."""
+        body = {"status": "paid"}
+        if amount is not None:
+            body["amount"] = amount
+        req = self.factory.patch(f"/api/v1/document-hub/invoices/{invoice.id}/", body, format="json")
+        force_authenticate(req, user=self.staff)
+        r = views.invoice_detail(req, invoice_id=str(invoice.id))
+        self.assertEqual(r.status_code, 200)
+        return r
 
+    def _hub_schedule(self):
         req = self.factory.get("/api/v1/document-hub/")
         force_authenticate(req, user=self.client_user)
-        r = views.get_hub(req)
-        schedule = r.data["payment_schedule"]
-        # paid_to_date/remaining_balance are declared DecimalFields, which DRF
-        # coerces to strings by default. next_payment_due_amount comes from a
-        # SerializerMethodField (get_next_payment_due_amount), which returns
-        # the raw model value with no such coercion — still a Decimal at this
-        # point (pre-JSON-render). Both are correct; they're just different
-        # representations at the .data (Python) layer, reconciled once DRF's
-        # JSON renderer actually serializes the response.
-        self.assertEqual(schedule["paid_to_date"], "4500000.00")
-        self.assertEqual(schedule["remaining_balance"], "2500000.00")
-        self.assertEqual(schedule["next_payment_due_amount"], Decimal("2500000.00"))
-        self.assertEqual(str(schedule["next_payment_due_date"]), "2026-07-06")
+        return views.get_hub(req).data["payment_schedule"]
 
-    def test_mark_milestone_paid(self):
-        schedule = PaymentSchedule.objects.create(engagement=self.engagement, total_investment=1000)
-        req = self.factory.post(
-            f"/api/v1/document-hub/payment-schedule/{schedule.id}/milestones/",
-            {"label": "Deposit", "amount": "1000", "due_date": "2026-05-06"},
-            format="json",
+    def test_creating_a_schedule_issues_one_linked_invoice_per_milestone(self):
+        # The double entry this removes: staff used to set a total, get three
+        # milestones, and then hand-create three invoices mirroring them.
+        schedule, invoices = self._schedule()
+
+        self.assertEqual(schedule.milestones.count(), 3)
+        self.assertEqual(sorted(invoices), ["Deposit", "Final Payment", "Phase 2"])
+        self.assertEqual(invoices["Deposit"].amount, Decimal("2100000.00"))
+        self.assertEqual(invoices["Phase 2"].amount, Decimal("2800000.00"))
+        # No agreed due date on the milestone yet, so none is invented — an
+        # invented one would show the client an already-overdue invoice.
+        self.assertIsNone(invoices["Deposit"].due_on)
+
+    def test_paying_an_invoice_moves_the_payment_schedule(self):
+        # THE regression. Flipping an invoice to paid used to write one column
+        # that nothing downstream read: paid_to_date stayed 0.00 and staff had
+        # to mark the milestone paid as a second, unlinked action.
+        schedule, invoices = self._schedule()
+
+        self._pay(invoices["Deposit"])
+
+        milestone = schedule.milestones.get(label="Deposit")
+        self.assertEqual(milestone.status, "paid")
+        self.assertEqual(milestone.amount_paid, Decimal("2100000.00"))
+        self.assertIsNotNone(milestone.paid_on)
+
+        tiles = self._hub_schedule()
+        self.assertEqual(tiles["paid_to_date"], "2100000.00")
+        self.assertEqual(tiles["remaining_balance"], "4900000.00")
+
+    def test_a_part_payment_is_recorded_as_part_paid(self):
+        # Real money rarely matches the plan: a 1,500,000 payment against a
+        # 2,800,000 phase is neither paid nor pending, and rounding it to either
+        # one makes the tiles lie.
+        schedule, invoices = self._schedule()
+
+        self._pay(invoices["Phase 2"], amount="1500000")
+
+        milestone = schedule.milestones.get(label="Phase 2")
+        self.assertEqual(milestone.status, "part_paid")
+        self.assertEqual(milestone.amount_paid, Decimal("1500000.00"))
+        self.assertEqual(milestone.balance, Decimal("1300000.00"))
+
+    def test_next_payment_due_is_the_outstanding_balance(self):
+        schedule, invoices = self._schedule()
+        self._pay(invoices["Deposit"])
+        # Part-pay the next one: it is still what's owed next, for its balance
+        # rather than its face value.
+        self._pay(invoices["Phase 2"], amount="1000000")
+
+        tiles = self._hub_schedule()
+        self.assertEqual(tiles["paid_to_date"], "3100000.00")
+        self.assertEqual(tiles["next_payment_due_amount"], Decimal("1800000.00"))
+
+    def test_unpaying_an_invoice_takes_the_money_back_off(self):
+        # The sync recomputes from the full invoice set rather than adding a
+        # delta, so every reversal converges instead of drifting.
+        schedule, invoices = self._schedule()
+        self._pay(invoices["Deposit"])
+
+        req = self.factory.patch(
+            f"/api/v1/document-hub/invoices/{invoices['Deposit'].id}/",
+            {"status": "pending"}, format="json",
         )
         force_authenticate(req, user=self.staff)
-        milestone_id = views.add_milestone(req, schedule_id=schedule.id).data["id"]
+        views.invoice_detail(req, invoice_id=str(invoices["Deposit"].id))
 
-        req = self.factory.patch(f"/api/v1/document-hub/milestones/{milestone_id}/mark-paid/", {}, format="json")
+        milestone = schedule.milestones.get(label="Deposit")
+        self.assertEqual(milestone.status, "pending")
+        self.assertEqual(milestone.amount_paid, Decimal("0"))
+        self.assertIsNone(milestone.paid_on)
+
+    def test_deleting_a_paid_invoice_reverses_its_milestone(self):
+        schedule, invoices = self._schedule()
+        self._pay(invoices["Deposit"])
+
+        req = self.factory.delete(f"/api/v1/document-hub/invoices/{invoices['Deposit'].id}/")
         force_authenticate(req, user=self.staff)
-        r = views.mark_milestone_paid(req, milestone_id=milestone_id)
+        self.assertEqual(
+            views.invoice_detail(req, invoice_id=str(invoices["Deposit"].id)).status_code, 200
+        )
+
+        milestone = schedule.milestones.get(label="Deposit")
+        self.assertEqual(milestone.amount_paid, Decimal("0"))
+        self.assertEqual(self._hub_schedule()["paid_to_date"], "0.00")
+
+    def test_milestone_status_cannot_be_written_directly(self):
+        # Derived from the invoices, so accepting it here would let a PATCH set
+        # a figure the next invoice edit silently overwrites.
+        schedule, _ = self._schedule()
+        milestone = schedule.milestones.get(label="Deposit")
+
+        req = self.factory.patch(
+            f"/api/v1/document-hub/milestones/{milestone.id}/",
+            {"status": "paid", "amount_paid": "2100000"}, format="json",
+        )
+        force_authenticate(req, user=self.staff)
+        r = views.milestone_detail(req, milestone_id=str(milestone.id))
+
+        self.assertEqual(r.status_code, 200)
+        milestone.refresh_from_db()
+        self.assertEqual(milestone.status, "pending")
+        self.assertEqual(milestone.amount_paid, Decimal("0"))
+
+    def test_a_milestone_due_date_fills_its_invoice(self):
+        schedule, invoices = self._schedule()
+        milestone = schedule.milestones.get(label="Deposit")
+
+        req = self.factory.patch(
+            f"/api/v1/document-hub/milestones/{milestone.id}/",
+            {"due_date": "2026-05-30"}, format="json",
+        )
+        force_authenticate(req, user=self.staff)
+        views.milestone_detail(req, milestone_id=str(milestone.id))
+
+        invoices["Deposit"].refresh_from_db()
+        self.assertEqual(str(invoices["Deposit"].due_on), "2026-05-30")
+
+    def test_mark_milestone_paid_flips_the_invoices_behind_it(self):
+        # The endpoint still works, but it goes through the invoices rather than
+        # writing the milestone — otherwise the invoices would still read
+        # "pending" and the next invoice edit would recompute the milestone
+        # straight back to unpaid.
+        schedule, invoices = self._schedule()
+        milestone = schedule.milestones.get(label="Deposit")
+
+        req = self.factory.patch(f"/api/v1/document-hub/milestones/{milestone.id}/mark-paid/", {}, format="json")
+        force_authenticate(req, user=self.staff)
+        r = views.mark_milestone_paid(req, milestone_id=str(milestone.id))
+
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.data["status"], "paid")
+        invoices["Deposit"].refresh_from_db()
+        self.assertEqual(invoices["Deposit"].status, "paid")
+
+    def test_mark_milestone_paid_still_works_without_an_invoice(self):
+        # Ad-hoc and pre-link milestones have nothing else to record the payment
+        # on, so they are still written directly.
+        schedule = PaymentSchedule.objects.create(engagement=self.engagement, total_investment=1000)
+        milestone = schedule.milestones.create(label="Ad-hoc", amount=Decimal("1000"))
+
+        req = self.factory.patch(f"/api/v1/document-hub/milestones/{milestone.id}/mark-paid/", {}, format="json")
+        force_authenticate(req, user=self.staff)
+        r = views.mark_milestone_paid(req, milestone_id=str(milestone.id))
+
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.data["status"], "paid")
         self.assertIsNotNone(r.data["paid_on"])
+        milestone.refresh_from_db()
+        self.assertEqual(milestone.amount_paid, Decimal("1000"))
+
+    def test_a_schedule_with_part_paid_milestones_cannot_be_deleted_unguarded(self):
+        # Money that arrived is a payment record even when it did not settle the
+        # milestone — the old PAID-only guard let those be deleted freely.
+        schedule, invoices = self._schedule()
+        self._pay(invoices["Deposit"], amount="500000")
+
+        req = self.factory.delete(f"/api/v1/document-hub/payment-schedule/{schedule.id}/?confirm=true")
+        force_authenticate(req, user=self.staff)
+        r = views.update_payment_schedule(req, schedule_id=str(schedule.id))
+        self.assertEqual(r.status_code, 400)
 
 
 class PaymentDueDigestTests(TestCase):

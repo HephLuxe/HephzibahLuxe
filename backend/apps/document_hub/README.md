@@ -13,9 +13,9 @@ staff-authored record with its own lifecycle.
 | Model | Purpose |
 |---|---|
 | `ClientDocument` | Service Agreement / Quotation / Welcome Booklet / FAQ / Other. `reference_code` + `signed_on` only meaningful for SVC_AGREEMENT/QUOTATION (the two signable categories). |
-| `PaymentSchedule` | One per engagement. `total_investment` + computed `paid_to_date` / `remaining_balance` / `next_payment_milestone` — backs the Payment Overview tiles. |
+| `PaymentSchedule` | One per engagement. `total_investment` + computed `paid_to_date` (sum of `amount_paid`) / `remaining_balance` / `next_payment_milestone` — backs the Payment Overview tiles. |
 | `PaymentMilestone` | Deposit / Phase 2 / Final Payment rows under a schedule. Carries a `percentage` (its share of `total_investment`) which is the source of truth; `amount` is derived from it. See **Contract payment split** below. |
-| `Invoice` | Numbered invoice rows (`invoice_number`, issued/due dates, amount, status). |
+| `Invoice` | Numbered invoice rows (`invoice_number`, issued/due dates, amount, status). `milestone` links it to what it bills for — paying it is what moves the schedule. |
 | `Receipt` | Numbered receipt rows (`receipt_number`, paid_on, payment_for, amount). |
 | `PortalDefaults` | **Singleton** config: 3 template file slots (Service Agreement / Welcome Booklet / FAQ) + a default `welcome_message`. Only the **FAQ** is auto-seeded onto a new engagement; the other two slots are kept but attached per client. See **Auto-seeded portal defaults** below. |
 | `ReferenceCounter` | Race-safe counters behind the auto-generated reference codes. Read-only in the admin. |
@@ -76,7 +76,8 @@ independently. The default contract structure is **30% Deposit / 40% Phase 2 /
 
 **What happens when:**
 - **Creating a schedule** (`POST .../payment-schedule/`) auto-generates the
-  default 30/40/30 milestones — staff only send `total_investment`.
+  default 30/40/30 milestones **and one linked invoice per milestone** — staff
+  only send `total_investment`. See *Invoices drive the schedule* below.
 - **Changing `total_investment`** (`PATCH .../payment-schedule/<uuid>/`) re-splits
   the percentage-based milestones over the new total automatically, so amounts
   stay consistent. Edit the total once; the phases follow.
@@ -102,8 +103,71 @@ separately in `apps.budgets` (`BudgetPayment`), which has nothing to do with
 
 Logic lives in `services.py`: `DEFAULT_PAYMENT_SPLIT`, `validate_split()`,
 `generate_milestones()`, `recompute_milestone_amounts()`. **Frontend:** each
-milestone in the `GET /document-hub/` aggregate now includes `percentage`
-alongside `amount`, `status`, `due_date`, and `paid_on`.
+milestone in the `GET /document-hub/` aggregate includes `percentage`,
+`amount`, `amount_paid`, `balance`, `status`, `due_date`, and `paid_on`.
+
+## Invoices drive the schedule
+
+**One direction, no double entry: pay the invoice, and the Payment Overview
+follows.** Nothing else moves it.
+
+`Invoice.milestone` is the link. It did not exist before — `Invoice` had a
+single FK (engagement), `paid_to_date` summed milestones, and nothing read an
+invoice's status. So staff issued invoices mirroring the milestones by hand,
+flipped one to paid, and the tiles did not move; the only way to shift them was
+to *also* mark the milestone paid. The same fact, entered twice, with nothing
+keeping the two entries honest.
+
+| Field | Written by | Meaning |
+|---|---|---|
+| `Invoice.status` | **staff** | the one thing you set |
+| `PaymentMilestone.amount_paid` | derived | sum of that milestone's **paid** invoices |
+| `PaymentMilestone.status` | derived | `pending` / `part_paid` / `paid`, from `amount_paid` vs `amount` |
+| `PaymentMilestone.paid_on` | derived | `issued_on` of the last invoice that settled it |
+| `PaymentSchedule.paid_to_date` | derived | sum of every milestone's `amount_paid` |
+
+`amount_paid`, `status` and `paid_on` are **read-only on the API and in the
+admin inline**. A PATCH that sets them is ignored rather than rejected — they
+are recomputed from the invoices on the next sync, so accepting a written value
+would only mean it disappeared later without explanation.
+
+**Part payments are first class.** `PART_PAID` exists because money arrives in
+amounts the plan did not predict — ₦1,500,000 against a ₦2,800,000 phase. A
+paid/pending boolean has to round that to one of two lies; `amount_paid` +
+`balance` do not. `next_payment_due_amount` is the **balance**, not the
+milestone's face value, so a part-paid milestone is never billed twice.
+
+**Reversals converge.** `sync_milestone_from_invoices` recomputes from the whole
+invoice set rather than adding a delta, so unpaying an invoice, deleting one, or
+editing its amount all land on the right number. Deleting the last paid invoice
+takes its money back off the milestone.
+
+**Milestones with no invoice still work.** `PATCH .../milestones/<id>/mark-paid/`
+writes an unlinked milestone directly — that covers ad-hoc milestones and every
+row predating the link. When the milestone *does* have invoices, the same
+endpoint marks **those** paid and lets the sync settle the milestone, so the two
+records can never disagree.
+
+**Receipts drive nothing.** A `Receipt` is the client-facing proof of a payment,
+not the payment record. Invoices are the single source of truth for the
+schedule.
+
+**Existing data:** invoices raised before this feature have `milestone = NULL`
+and drive nothing. Pair them up with
+
+```
+python manage.py link_invoices_to_milestones            # dry run, prints the pairing
+python manage.py link_invoices_to_milestones --apply
+```
+
+It matches by amount within an engagement and only ever touches invoices with no
+milestone, so it is safe to re-run. It is a command and not a data migration
+precisely because the pairing is a **guess** — a 30/40/30 split has two
+milestones at the same amount, and that wants an eyeball before `--apply`.
+
+Logic lives in `services.py`: `derive_milestone_status()`,
+`sync_milestone_from_invoices()`, `sync_invoice_milestone()`,
+`issue_invoices_for_schedule()`, `propagate_due_date()`.
 
 ### Reference codes are auto-generated & read-only
 `reference_code` / `invoice_number` / `receipt_number` follow
@@ -220,6 +284,12 @@ tiles + next-payment-due derivation, mark-paid.
   optional (defaults to the portal's *active* engagement, so you can pre-stage a
   future event's paperwork). `reference_code` is read-only — a client-supplied
   value is ignored, not rejected.
+- **Never bulk-`update()` an invoice's status.** `Invoice.objects.filter(...)
+  .update(status="paid")` writes the column and fires nothing — no signal, no
+  service — so the linked milestones stay pending and the Payment Overview does
+  not move. That is the exact bug the milestone link exists to fix. Save row by
+  row and call `services.sync_invoice_milestone()`, as `InvoiceAdmin.mark_as_paid`
+  does.
 - **There's no per-category uniqueness.** Two Service Agreements on one
   engagement is allowed and yields `C001`, `C002`, and `GET /document-hub/`
   returns both in `service_agreements` — same for `quotations`. Only the

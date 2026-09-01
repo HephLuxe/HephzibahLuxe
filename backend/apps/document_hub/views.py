@@ -237,6 +237,10 @@ def create_payment_schedule(request: Request) -> Response:
         # A new schedule is born with the default 30/40/30 contract split — the
         # amounts are derived from total_investment (services.generate_milestones).
         services.generate_milestones(schedule)
+        # ...and one invoice per milestone, already linked. Paying an invoice is
+        # what moves this schedule, so issuing them here is what stops staff
+        # having to enter the same three amounts twice.
+        services.issue_invoices_for_schedule(schedule, issued_by=request.user)
     return Response(PaymentScheduleSerializer(schedule).data, status=status.HTTP_201_CREATED)
 
 
@@ -259,12 +263,16 @@ def update_payment_schedule(request: Request, schedule_id: str) -> Response:
 
     if request.method == "DELETE":
         milestones = schedule.milestones.all()
-        paid = milestones.filter(status=PaymentMilestoneStatus.PAID).count()
+        # PART_PAID counts as well: money that actually arrived is a payment
+        # record whether or not it settled the milestone, and the old
+        # PAID-only check would have let a schedule holding real part payments
+        # be deleted without so much as a confirm.
+        paid = milestones.exclude(status=PaymentMilestoneStatus.PENDING).count()
         total = milestones.count()
         if paid:
             return _error(
-                f"This schedule has {paid} paid milestone(s). Delete or unmark those first — "
-                "a paid milestone is a payment record, not a draft.",
+                f"This schedule has {paid} paid or part-paid milestone(s). Delete or unmark those "
+                "first — a milestone with money against it is a payment record, not a draft.",
                 VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST,
                 errors={"impact": {"milestones": total, "paid_milestones": paid}},
             )
@@ -303,6 +311,11 @@ def add_milestone(request: Request, schedule_id: str) -> Response:
         return _error("Invalid milestone data.", VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST, errors=serializer.errors)
 
     milestone = save_with_attribution(serializer, request.user, schedule=schedule)
+    # An ad-hoc milestone is money the client owes, so it gets billed like every
+    # other one. Skips milestones that already have an invoice, so this is the
+    # same call the schedule-creation path makes.
+    services.issue_invoices_for_schedule(schedule, issued_by=request.user)
+    milestone.refresh_from_db()
     return Response(PaymentMilestoneSerializer(milestone).data, status=status.HTTP_201_CREATED)
 
 
@@ -321,8 +334,11 @@ def milestone_detail(request: Request, milestone_id: str) -> Response:
     if not serializer.is_valid():
         return _error("Invalid milestone data.", VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST, errors=serializer.errors)
 
-    save_with_attribution(serializer, request.user)
-    return Response(serializer.data)
+    milestone = save_with_attribution(serializer, request.user)
+    # A due date agreed on the plan is the date the client should see on the
+    # invoice for it — fills only invoices that have none of their own.
+    services.propagate_due_date(milestone)
+    return Response(PaymentMilestoneSerializer(milestone).data)
 
 
 @api_view(["PATCH"])
@@ -358,6 +374,9 @@ def create_invoice(request: Request) -> Response:
 
     invoice = save_with_attribution(serializer, request.user, engagement=engagement)
     services.notify_invoice_issued(invoice)
+    # An invoice can be created already paid (staff recording a payment after
+    # the fact), so the sync runs on create too, not only on the status flip.
+    services.sync_invoice_milestone(invoice)
     return Response(InvoiceSerializer(invoice).data, status=status.HTTP_201_CREATED)
 
 
@@ -369,15 +388,25 @@ def invoice_detail(request: Request, invoice_id: str) -> Response:
         return _error("Invoice not found.", NOT_FOUND, status.HTTP_404_NOT_FOUND)
 
     if request.method == "DELETE":
+        # Held before the row goes, then re-synced after: deleting a PAID
+        # invoice has to take its money back off the milestone, and the FK is
+        # unreadable once the row is gone.
+        milestone = invoice.milestone
         invoice.delete()
+        if milestone is not None:
+            services.sync_milestone_from_invoices(milestone)
         return Response({"detail": "Invoice deleted."})
 
     serializer = InvoiceSerializer(invoice, data=request.data, partial=True)
     if not serializer.is_valid():
         return _error("Invalid invoice data.", VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST, errors=serializer.errors)
 
-    save_with_attribution(serializer, request.user)
-    return Response(serializer.data)
+    invoice = save_with_attribution(serializer, request.user)
+    # THE fix for "invoices don't drive the payment schedule": flipping status
+    # to paid here is what settles the linked milestone and moves the Payment
+    # Overview tiles. Unlinked invoices no-op.
+    services.sync_invoice_milestone(invoice)
+    return Response(InvoiceSerializer(invoice).data)
 
 
 # ── Receipts ─────────────────────────────────────────────────────

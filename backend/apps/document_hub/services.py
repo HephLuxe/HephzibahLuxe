@@ -9,6 +9,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from django.core.files.base import ContentFile
 from django.db import transaction
+from django.db.models import Sum
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
@@ -156,13 +157,171 @@ def build_hub(engagement) -> dict:
     }
 
 
-def mark_milestone_paid(milestone: PaymentMilestone, paid_on=None, updated_by=None) -> PaymentMilestone:
-    """Staff marks a milestone as paid — stamps paid_on (defaults to today)."""
+# ── Invoices drive the payment schedule ──────────────────────────
+#
+# There used to be no relationship at all between the two: `Invoice` had one FK
+# (engagement), and `paid_to_date` summed milestones. So staff issued three
+# invoices mirroring three milestones, flipped an invoice to paid, and the
+# Payment Overview did not move — the flip wrote a column nothing downstream
+# read. The only way to move the tiles was to *also* mark the milestone paid,
+# which is the same fact entered twice, with nothing keeping the two entries
+# honest.
+#
+# The direction is now one-way and explicit: an invoice is the billing record,
+# and money recorded against an invoice is what a milestone reflects.
+# `PaymentMilestone.amount_paid` and `.status` are DERIVED from the milestone's
+# invoices and should not be written by hand anywhere else.
+
+
+def derive_milestone_status(milestone: PaymentMilestone) -> str:
+    """The status implied by how much has been paid. The single definition of
+    what paid/part-paid/pending mean, so the API, the admin and the digest task
+    can never disagree about a milestone's state."""
     from .models import PaymentMilestoneStatus
 
+    if milestone.amount_paid <= 0:
+        return PaymentMilestoneStatus.PENDING
+    # `>=`, not `==`: an overpayment settles the milestone. See
+    # PaymentMilestone.balance for why the excess is not carried forward.
+    if milestone.amount_paid >= milestone.amount:
+        return PaymentMilestoneStatus.PAID
+    return PaymentMilestoneStatus.PART_PAID
+
+
+def sync_milestone_from_invoices(milestone: PaymentMilestone) -> PaymentMilestone:
+    """
+    Re-derive one milestone's `amount_paid` / `status` / `paid_on` from its paid
+    invoices, and email the client if it just became fully paid.
+
+    Recomputes from the full set rather than adding a delta, which makes it
+    idempotent: unpaying an invoice, deleting one, editing an amount and
+    re-running all converge on the same answer. A delta would drift the first
+    time any of those happened.
+
+    Call this ONLY for a milestone that is invoice-driven. It derives strictly
+    from the invoices, so a milestone with none is reset to zero — which is
+    correct when its last invoice was just deleted (the money went with it), and
+    wrong for a milestone that never had one. `mark_milestone_paid` is what
+    branches on that; it writes ad-hoc and pre-link milestones directly and
+    never routes them through here.
+    """
+    from .models import InvoiceStatus, PaymentMilestoneStatus
+
+    paid_invoices = milestone.invoices.filter(status=InvoiceStatus.PAID)
+    was_paid = milestone.status == PaymentMilestoneStatus.PAID
+
+    milestone.amount_paid = paid_invoices.aggregate(
+        total=Sum("amount")
+    )["total"] or Decimal("0")
+    milestone.status = derive_milestone_status(milestone)
+    # The date of the LAST payment that settled it — the client's question is
+    # "when was this cleared", not "when did the first instalment land". Cleared
+    # again if the milestone falls back out of paid, so a reversed invoice does
+    # not leave a paid date on an unpaid milestone.
+    milestone.paid_on = (
+        paid_invoices.order_by("-issued_on").values_list("issued_on", flat=True).first()
+        if milestone.status == PaymentMilestoneStatus.PAID
+        else None
+    )
+    milestone.save(update_fields=["amount_paid", "status", "paid_on", "updated_at"])
+
+    # Only on the pending/part-paid -> paid EDGE. Without that guard, editing an
+    # unrelated field on an already-paid invoice would re-email the client that
+    # the same milestone had been paid.
+    if not was_paid and milestone.status == PaymentMilestoneStatus.PAID:
+        notify_milestone_paid(milestone)
+    return milestone
+
+
+def sync_invoice_milestone(invoice) -> None:
+    """Push an invoice's state onto the milestone it bills for. The one hook
+    every invoice write path calls; a no-op for an unlinked invoice."""
+    if invoice.milestone_id is None:
+        return
+    invoice.milestone.refresh_from_db()
+    sync_milestone_from_invoices(invoice.milestone)
+
+
+@transaction.atomic
+def issue_invoices_for_schedule(schedule, issued_by=None) -> list:
+    """
+    Raise one invoice per milestone that has none yet, already linked.
+
+    This is what removes the double entry: setting a total investment produces
+    the milestones AND the invoices that bill for them in a single action, so
+    staff only ever touch the invoice afterward. Milestones that already have an
+    invoice are skipped, so this is safe to re-run after adding a milestone.
+
+    `due_on` is copied from the milestone's `due_date`, which is usually unset at
+    this point — deliberately left NULL rather than defaulted to today, since an
+    invented due date shows the client an invoice that is already overdue.
+    Setting the milestone's due date later fills it (see propagate_due_date).
+    """
+    from .models import Invoice
+
+    invoices = []
+    # `amount_paid=0` alongside "has no invoice": a milestone already settled by
+    # hand (mark_milestone_paid before it had any invoice) must not be billed
+    # again — and issuing a pending invoice against it would make the next sync
+    # recompute it back to unpaid, silently erasing a recorded payment.
+    candidates = schedule.milestones.filter(
+        invoices__isnull=True, amount_paid__lte=0
+    ).order_by("order")
+    for milestone in candidates:
+        invoices.append(
+            Invoice.objects.create(
+                engagement=schedule.engagement,
+                milestone=milestone,
+                issued_on=timezone.now().date(),
+                due_on=milestone.due_date,
+                amount=milestone.amount,
+                # Same inheritance generate_milestones uses: these rows are
+                # generated, not typed, so there is no request.user here and an
+                # unstamped row reads as "nobody made this".
+                created_by=issued_by or schedule.created_by,
+            )
+        )
+    return invoices
+
+
+def propagate_due_date(milestone: PaymentMilestone) -> None:
+    """Carry a milestone's due date onto the invoices billing for it.
+
+    Only fills invoices that have no date of their own — a due date a staff
+    member typed onto an invoice is the one the client was sent and outranks the
+    plan.
+    """
+    if milestone.due_date is None:
+        return
+    milestone.invoices.filter(due_on__isnull=True).update(due_on=milestone.due_date)
+
+
+def mark_milestone_paid(milestone: PaymentMilestone, paid_on=None, updated_by=None) -> PaymentMilestone:
+    """Staff marks a milestone as paid — stamps paid_on (defaults to today).
+
+    When the milestone HAS invoices, this marks those invoices paid and lets the
+    sync settle the milestone, rather than writing the milestone directly. Same
+    outcome for the caller, but it keeps one source of truth: writing
+    `amount_paid` here would leave the invoices saying "pending", and the next
+    invoice edit would recompute the milestone straight back to unpaid.
+
+    Unlinked milestones (ad-hoc, or predating the link) are still written
+    directly — there is nothing else to record the payment on.
+    """
+    from .models import InvoiceStatus, PaymentMilestoneStatus
+
+    paid_on = paid_on or timezone.now().date()
+
+    if milestone.invoices.exists():
+        milestone.invoices.exclude(status=InvoiceStatus.PAID).update(
+            status=InvoiceStatus.PAID
+        )
+        return sync_milestone_from_invoices(milestone)
+
     milestone.status = PaymentMilestoneStatus.PAID
-    milestone.paid_on = paid_on or timezone.now().date()
-    update_fields = ["status", "paid_on"]
+    milestone.amount_paid = milestone.amount
+    milestone.paid_on = paid_on
+    update_fields = ["status", "amount_paid", "paid_on"]
     if stamp_attribution(milestone, updated_by, creating=False):
         update_fields.append("last_updated_by")
     milestone.save(update_fields=update_fields)

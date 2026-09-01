@@ -57,14 +57,21 @@ class ClientDocumentSerializer(AttributionSerializerMixin, serializers.ModelSeri
 class PaymentMilestoneSerializer(AttributionSerializerMixin, serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
 
+    balance = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+
     class Meta:
         model = PaymentMilestone
         fields = [
-            "id", "label", "percentage", "amount", "due_date", "paid_on",
-            "status", "status_display", "order",
+            "id", "label", "percentage", "amount", "amount_paid", "balance",
+            "due_date", "paid_on", "status", "status_display", "order",
             "created_by_display", "last_updated_by_display",
         ]
-        read_only_fields = ["id"]
+        # amount_paid and status are DERIVED from the milestone's invoices
+        # (services.sync_milestone_from_invoices), so accepting either here
+        # would let a PATCH write a figure the next invoice edit silently
+        # overwrites. Move the money by paying the invoice, or by
+        # PATCH .../mark-paid/ for a milestone that has none.
+        read_only_fields = ["id", "amount_paid", "balance", "status", "paid_on"]
 
 
 class PaymentScheduleSerializer(AttributionSerializerMixin, serializers.ModelSerializer):
@@ -86,8 +93,12 @@ class PaymentScheduleSerializer(AttributionSerializerMixin, serializers.ModelSer
         read_only_fields = ["id", "updated_at"]
 
     def get_next_payment_due_amount(self, obj: PaymentSchedule) -> Decimal | None:
+        # The OUTSTANDING figure, not the milestone's full amount. On a
+        # part-paid milestone the full amount is money the client has already
+        # partly sent, and billing it again is the tile telling them to
+        # overpay.
         milestone = obj.next_payment_milestone
-        return milestone.amount if milestone else None
+        return milestone.balance if milestone else None
 
     def get_next_payment_due_date(self, obj: PaymentSchedule) -> datetime.date | None:
         milestone = obj.next_payment_milestone
@@ -96,16 +107,29 @@ class PaymentScheduleSerializer(AttributionSerializerMixin, serializers.ModelSer
 
 class InvoiceSerializer(AttributionSerializerMixin, serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    # Which milestone this invoice bills for. Writable by id so staff can point
+    # a manually-raised invoice at a milestone; `milestone_label` is the
+    # read-side convenience so the invoices table can show it without a lookup.
+    milestone = serializers.PrimaryKeyRelatedField(
+        queryset=PaymentMilestone.objects.all(), required=False, allow_null=True,
+    )
+    milestone_label = serializers.CharField(source="milestone.label", read_only=True, default=None)
 
     class Meta:
         model = Invoice
         fields = [
-            "id", "invoice_number", "issued_on", "due_on",
+            "id", "invoice_number", "milestone", "milestone_label",
+            "issued_on", "due_on",
             "amount", "status", "status_display", "file", "created_at",
             "created_by_display", "last_updated_by_display",
         ]
         # invoice_number is system-generated — read-only.
         read_only_fields = ["id", "invoice_number", "created_at"]
+        # due_on is NULL-able on the model purely so issue_invoices_for_schedule
+        # can raise an invoice for a milestone with no agreed date yet. An API
+        # caller writing an invoice by hand has a date in mind, so it stays
+        # required here rather than silently landing as null.
+        extra_kwargs = {"due_on": {"required": True, "allow_null": False}}
 
     def validate_file(self, value):
         return validate_document(value)

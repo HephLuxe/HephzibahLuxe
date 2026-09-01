@@ -22,6 +22,7 @@ validator still guards the format. (This reverses the earlier staff-typed scheme
 """
 
 import uuid
+from decimal import Decimal
 
 from django.core.validators import RegexValidator
 from django.db import models, transaction
@@ -92,6 +93,13 @@ class ClientDocument(UUIDTimestampedModel, AttributedModel):
 
 class PaymentMilestoneStatus(models.TextChoices):
     PAID = "paid", "Paid"
+    # A real payment that does not cover the whole milestone. It exists because
+    # money arrives in amounts the plan did not predict — a client sends a
+    # ~3,000,000 retainer against a 2,100,000 deposit, or 1,500,000 against a
+    # 2,800,000 phase — and a paid/pending boolean has to round that to one of
+    # two lies. Derived from `amount_paid`, never set by hand: see
+    # services.derive_milestone_status.
+    PART_PAID = "part_paid", "Partly paid"
     PENDING = "pending", "Pending"
 
 
@@ -107,9 +115,14 @@ class PaymentSchedule(UUIDTimestampedModel, AttributedModel):
 
     @property
     def paid_to_date(self):
-        return self.milestones.filter(status=PaymentMilestoneStatus.PAID).aggregate(
-            total=models.Sum("amount")
-        )["total"] or 0
+        """Money actually received against this schedule.
+
+        Sums `amount_paid`, not the full `amount` of milestones flagged paid.
+        The old form counted a milestone as all-or-nothing, so a part payment
+        contributed zero and the tile under-reported real money; it also meant
+        the number could only ever move in whole milestones.
+        """
+        return self.milestones.aggregate(total=models.Sum("amount_paid"))["total"] or 0
 
     @property
     def remaining_balance(self):
@@ -117,10 +130,15 @@ class PaymentSchedule(UUIDTimestampedModel, AttributedModel):
 
     @property
     def next_payment_milestone(self):
-        """Earliest unpaid milestone by due date — drives "Next Payment Due"."""
+        """Earliest milestone still owing anything — drives "Next Payment Due".
+
+        Excludes PAID rather than requiring PENDING: a part-paid milestone is
+        still the next thing owed, and filtering on PENDING alone would skip
+        past it to a milestone that has had nothing paid against it at all.
+        """
         return (
-            self.milestones.filter(status=PaymentMilestoneStatus.PENDING)
-            .order_by("due_date")
+            self.milestones.exclude(status=PaymentMilestoneStatus.PAID)
+            .order_by(models.F("due_date").asc(nulls_last=True), "order")
             .first()
         )
 
@@ -142,6 +160,12 @@ class PaymentMilestone(UUIDTimestampedModel, AttributedModel):
     # default=0 so a new admin-inline row (where amount is derived, not typed) can
     # save before PaymentScheduleAdmin.save_related recomputes it from percentage.
     amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    # How much of `amount` has actually been received. DERIVED, not typed:
+    # services.sync_milestone_from_invoices recomputes it from the milestone's
+    # paid invoices, which is what makes an invoice the thing that drives this
+    # schedule. A milestone with no invoices keeps whatever mark_milestone_paid
+    # last set, so ad-hoc and legacy rows still work.
+    amount_paid = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     due_date = models.DateField(null=True, blank=True)
     paid_on = models.DateField(null=True, blank=True)
     status = models.CharField(
@@ -157,7 +181,15 @@ class PaymentMilestone(UUIDTimestampedModel, AttributedModel):
         ordering = ["order", "due_date"]
 
     def __str__(self) -> str:
-        return f"{self.label} — {self.amount} ({self.status})"
+        return f"{self.label} — {self.amount_paid}/{self.amount} ({self.status})"
+
+    @property
+    def balance(self):
+        """Still owed on this milestone. Never negative — an overpayment (the
+        client rounds up, or a retainer exceeds the deposit) settles the
+        milestone and leaves nothing owing rather than reading as a credit the
+        tracker has no way to carry forward."""
+        return max(self.amount - self.amount_paid, Decimal("0"))
 
 
 class InvoiceStatus(models.TextChoices):
@@ -170,9 +202,28 @@ class Invoice(UUIDTimestampedModel, AttributedModel):
     engagement = models.ForeignKey(
         "portal.EventEngagement", on_delete=models.CASCADE, related_name="invoices"
     )
+    # The milestone this invoice bills for. Nullable because an invoice can be
+    # raised for something outside the schedule entirely, and because every
+    # invoice written before this field existed has none. When set, paying this
+    # invoice is what moves the milestone — see
+    # services.sync_milestone_from_invoices.
+    #
+    # A ForeignKey, not a OneToOne: a milestone can legitimately be billed in
+    # more than one instalment, and the sync sums whichever of them are paid.
+    # SET_NULL so deleting a milestone never destroys an issued invoice — that
+    # is a client-facing numbered record.
+    milestone = models.ForeignKey(
+        "PaymentMilestone", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="invoices",
+    )
     invoice_number = models.CharField(max_length=50, unique=True, validators=[reference_code_validator])
     issued_on = models.DateField()
-    due_on = models.DateField()
+    # Nullable ONLY for the auto-issued case: an invoice raised alongside a
+    # milestone that has no agreed due date yet has no honest date to carry, and
+    # inventing "today" would show the client an invoice already overdue. The
+    # serializer still requires it on manual creation, so nothing an API caller
+    # writes can omit it.
+    due_on = models.DateField(null=True, blank=True)
     amount = models.DecimalField(max_digits=15, decimal_places=2)
     status = models.CharField(max_length=10, choices=InvoiceStatus.choices, default=InvoiceStatus.PENDING)
     file = models.FileField(upload_to=invoice_upload_path, blank=True, null=True, max_length=500)

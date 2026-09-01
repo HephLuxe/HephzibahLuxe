@@ -2,11 +2,11 @@
 apps/document_hub/tasks.py
 
 payment_due_digest_task — daily scan (cron group `daily_maintenance`, see
-apps/core/management/commands/run_scheduled.py) for PENDING milestones due
-within LOOKAHEAD_DAYS that haven't been notified yet. Domain-specific digest
-logic lives here (not in apps.notifications) — notifications only owns the
-generic send/retry/cleanup mechanics; this app is the one that knows what a
-PaymentMilestone is.
+apps/core/management/commands/run_scheduled.py) for milestones that still owe
+money and fall due within LOOKAHEAD_DAYS, and that haven't been notified yet.
+Domain-specific digest logic lives here (not in apps.notifications) —
+notifications only owns the generic send/retry/cleanup mechanics; this app is
+the one that knows what a PaymentMilestone is.
 """
 
 import logging
@@ -50,8 +50,12 @@ def payment_due_digest_task() -> None:
         days=LOOKAHEAD_DAYS + max_utc_offset_days()
     )
 
-    milestones = PaymentMilestone.objects.filter(
-        status=PaymentMilestoneStatus.PENDING,
+    # Anything not fully settled is still owed — a part-paid milestone has a
+    # balance and needs the same nudge. `status=PENDING` alone would go quiet on
+    # a client who sent half.
+    milestones = PaymentMilestone.objects.exclude(
+        status=PaymentMilestoneStatus.PAID,
+    ).filter(
         due_date__isnull=False,
         due_date__lte=query_cutoff,
         reminder_sent_at__isnull=True,
@@ -94,7 +98,10 @@ def payment_due_digest_task() -> None:
             template_name="payment_due",
             context={
                 "label": milestone.label,
-                "amount": str(milestone.amount),
+                # What is still owed, not the milestone's face value — on a
+                # part-paid milestone those differ, and the client should be
+                # asked for the balance.
+                "amount": str(milestone.balance),
                 "due_date": str(milestone.due_date),
                 "event_title": engagement.event.title if engagement.event else "",
             },
