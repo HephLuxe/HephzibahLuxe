@@ -85,9 +85,15 @@ Render's dedicated pre-deploy step is a paid-tier feature. Web healthchecks at
 `/health/`. Static files are served by **WhiteNoise** (no separate static host);
 `collectstatic` also runs in the build command.
 
+`ensure_developer` runs alongside them, and must: it is what recreates the
+protected developer account after a database restore or a fresh environment, and
+what repairs it if an admin managed to demote it. Idempotent — one query per
+address in `PLATFORM_DEVELOPER_EMAILS`, and a no-op when that is unset. See
+docs/adr/0004-protected-developer-role.md.
+
 ```
 # Web — Build Command
-pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate --noinput
+pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate --noinput && python manage.py ensure_developer
 # Web — Start Command
 gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
 
@@ -517,6 +523,16 @@ python manage.py cleanup_orphaned_documents             # actually delete
 # yourself" under Common operator tasks.
 python manage.py release_login_lock you@example.com
 python manage.py release_login_lock --all               # every locked account
+
+# [accounts] Create or repair the protected developer accounts named in the
+# PLATFORM_DEVELOPER_EMAILS environment variable — the role above admin, which an
+# admin cannot revoke (docs/adr/0004-protected-developer-role.md). Idempotent, so
+# it belongs in the build command and is safe to run by hand any time. It creates
+# the account if missing, re-derives role/is_active/is_staff/is_superuser if an
+# admin managed to change them, and NEVER touches an existing password. A no-op
+# with a friendly message when the variable is unset.
+python manage.py ensure_developer --dry-run             # report only
+python manage.py ensure_developer
 ```
 
 `cleanup_orphaned_documents` also runs weekly now, wrapped as a task in

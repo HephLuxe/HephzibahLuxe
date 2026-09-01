@@ -32,7 +32,16 @@
   users out hourly.
 - **Roles:** `client` (celebrant) sees only their own portal's resources; `staff`
   / `admin` may act on any portal, usually by passing `?portal_id=<uuid>` (reads)
-  or `portal_id` in the body (writes).
+  or `portal_id` in the body (writes). A fourth role, `developer`, sits above
+  `admin`: it passes every `staff`/`admin` check (so no endpoint behaves
+  differently for it) and additionally cannot be demoted, renamed,
+  re-passworded, deactivated or deleted by anyone else. It is granted by the
+  `PLATFORM_DEVELOPER_EMAILS` deployment setting rather than on the platform, so
+  `POST /users/register/` refuses both `"role": "developer"` and any
+  registration at a configured developer address (400), and
+  `PATCH /users/<email>/status/` against one returns **403**. It appears in
+  `GET /users/` and is filterable with `?role=developer` like any other. See
+  `docs/adr/0004-protected-developer-role.md`.
 - **One carve-out from the two rules above:** `POST /api/v1/inquiries/` (public
   lead capture) takes no token and applies no role scoping. The auth endpoints
   (`auth/token/*`, `auth/password-reset/*`) are necessarily unauthenticated
@@ -112,7 +121,7 @@
   | Ceiling | Bytes | Fields | Accepts |
   |---|---|---|---|
   | photo | 5 MB | `EventContact.photo`, `TeamMember.photo`, `BudgetPayment.receipt` | JPEG, PNG, WebP (+ PDF for the receipt) |
-  | image | 10 MB | `Event.featured_image`, `EventDay.event_images`, meeting prep uploads | JPEG, PNG, WebP (+ PDF for prep) |
+  | image | 10 MB | `EventImage.image` (event + event-day galleries), meeting prep uploads | JPEG, PNG, WebP (+ PDF for prep) |
   | document | 25 MB | the five `document_hub` files (client documents, invoices, receipts, the three portal-default templates) | PDF, JPEG, PNG, WebP |
 
   The numbers are not arbitrary and the UI should mirror them client-side rather

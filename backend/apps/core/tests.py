@@ -29,7 +29,7 @@ from apps.core.uploads import validate_document, validate_image, validate_photo
 from apps.core.utils import save_with_attribution, stamp_attribution, user_display_name
 from apps.document_hub.serializers import ClientDocumentSerializer
 from apps.events.models import Event
-from apps.events.serializers import EventDaySerializer, EventSerializer
+from apps.events.serializers import EventImageSerializer, EventSerializer
 
 
 class HealthEndpointTests(TestCase):
@@ -815,8 +815,7 @@ class UploadCeilingTests(TestCase):
         self.assertEqual(found, {
             "contacts.EventContact.photo",
             "portal.TeamMember.photo",
-            "events.Event.featured_image",
-            "events.EventDay.event_images",
+            "events.EventImage.image",
             "budgets.BudgetPayment.receipt",
             "meetings.PrepItemFileUpload.file",
             "document_hub.ClientDocument.file",
@@ -850,21 +849,17 @@ class UploadCeilingIsWiredToSerializersTests(TestCase):
         f.size = size
         return f
 
-    def test_event_featured_image_is_capped(self):
-        serializer = EventSerializer(
-            data={"featured_image": self._oversized_png(uploads.MAX_IMAGE_SIZE + 1)},
+    def test_gallery_images_are_capped(self):
+        """The single `featured_image` / `event_images` fields this replaced were
+        each covered by their own case here. Both galleries now go through one
+        serializer, so one case covers the event cover, a day's cover, and every
+        other photograph in either gallery."""
+        serializer = EventImageSerializer(
+            data={"image": self._oversized_png(uploads.MAX_IMAGE_SIZE + 1)},
             partial=True,
         )
         self.assertFalse(serializer.is_valid())
-        self.assertIn("featured_image", serializer.errors)
-
-    def test_event_day_images_are_capped(self):
-        serializer = EventDaySerializer(
-            data={"event_images": self._oversized_png(uploads.MAX_IMAGE_SIZE + 1)},
-            partial=True,
-        )
-        self.assertFalse(serializer.is_valid())
-        self.assertIn("event_images", serializer.errors)
+        self.assertIn("image", serializer.errors)
 
     def test_client_document_file_is_capped(self):
         """A FileField, so nothing else was checking it at all — not size, not
@@ -887,9 +882,9 @@ class UploadCeilingIsWiredToSerializersTests(TestCase):
     def test_a_normal_upload_still_passes(self):
         """The ceilings must not refuse the thing they exist to permit."""
         ordinary = self._oversized_png(2 * uploads.MB)
-        serializer = EventSerializer(data={"featured_image": ordinary}, partial=True)
+        serializer = EventImageSerializer(data={"image": ordinary}, partial=True)
         serializer.is_valid()
-        self.assertNotIn("featured_image", serializer.errors)
+        self.assertNotIn("image", serializer.errors)
 
 
 class DatabaseConnectionSettingsTests(TestCase):

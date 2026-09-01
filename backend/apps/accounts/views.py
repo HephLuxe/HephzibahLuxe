@@ -25,7 +25,7 @@ from apps.core.ratelimit import resolve_client_ip
 from apps.core.utils import save_with_attribution
 
 from ..core.permissions import IsStaffOrSuperuser, enforce, is_staff_or_superuser
-from . import login_guard, services
+from . import developers, login_guard, services
 from .serializers import (
     AdminUserCreationSerializer,
     CustomTokenObtainPairSerializer,
@@ -239,7 +239,10 @@ def register_user(request):
     """
     enforce(is_staff_or_superuser(request.user), "You don't have permission to register users. Only admins can register users.")
 
-    serializer = AdminUserCreationSerializer(data=request.data)
+    # context= is load-bearing, not boilerplate: AdminUserCreationSerializer's
+    # validate_role/validate_email read request.user to decide whether the
+    # caller may mint a developer. Without it every staff account could.
+    serializer = AdminUserCreationSerializer(data=request.data, context={"request": request})
     if not serializer.is_valid():
         return _error("Invalid user data.", VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST, errors=serializer.errors)
 
@@ -368,6 +371,13 @@ class MyTokenObtainPairView(TokenObtainPairView):
             exc = Ratelimited()
             exc.retry_after = full["retry_after"]
             raise exc
+
+        # Put a drifted developer row back BEFORE anything reads it. Django's
+        # auth backend and SimpleJWT both check `is_active` on the row and would
+        # refuse a developer whom a queryset.update() had deactivated — the one
+        # demotion path that bypasses User.save(). A set-membership test for
+        # every other address, so ordinary logins pay nothing.
+        developers.repair_by_email(email)
 
         # get_user_model() locally, matching the rest of this module.
         user = get_user_model().objects.filter(email=email).first() if email else None

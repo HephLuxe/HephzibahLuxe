@@ -8,7 +8,9 @@ apart — both call the same two functions.
 
 from django.db import transaction
 from django.utils import timezone
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
+
+from . import developers
 
 
 def _revoke_refresh_tokens(user) -> int:
@@ -46,7 +48,36 @@ def deactivate_user(user, *, by=None, reason: str = "") -> dict:
 
     Raises ValidationError if a user tries to deactivate themselves — an easy
     misclick that's painful to undo (you'd need another admin or a shell).
+
+    Raises PermissionDenied if aimed at a developer account — by ANYONE,
+    including another developer and including that developer themselves.
+
+    Nobody, rather than "nobody but a peer", because ``User.save()`` re-derives
+    ``is_active=True`` for a developer unconditionally
+    (``developers.expected_state``). A permitted call would therefore write the
+    deactivation, have it corrected on the way to the database, and still return
+    ``changed: True`` — a success message describing something that did not
+    happen, which is the precise failure this project rejects elsewhere. Matching
+    the guard to the derived state keeps the two from disagreeing, and makes
+    deactivation consistent with deletion, which the ``pre_delete`` signal
+    refuses for every actor too.
+
+    Retiring a developer is therefore always the same two steps: remove the
+    address from ``PLATFORM_DEVELOPER_EMAILS`` and redeploy, after which this
+    function treats the account like any other.
+
+    The guard is here, in the service, rather than in the two callers, for the
+    same reason the self-deactivation check is: the API endpoint and the admin
+    action both come through this function, so a check placed here cannot be
+    missed by one of them.
     """
+    if developers.is_developer(user):
+        raise PermissionDenied(
+            f"{user.email} is a protected developer account and cannot be "
+            "deactivated. Remove the address from PLATFORM_DEVELOPER_EMAILS and "
+            "redeploy first if this is intentional."
+        )
+
     if by is not None and by.pk == user.pk:
         raise ValidationError("You cannot deactivate your own account.")
 

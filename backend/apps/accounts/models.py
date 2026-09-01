@@ -9,9 +9,30 @@ from apps.core.models import AttributedModel
 
 
 class UserRole(models.TextChoices):
+    """The platform's four roles, listed lowest privilege first.
+
+    CLIENT and STAFF and ADMIN are administered on the platform. DEVELOPER is
+    not: it is held by the addresses in ``settings.PLATFORM_DEVELOPER_EMAILS``
+    and this column only mirrors that list. Assigning DEVELOPER here to an
+    address that is not configured produces a label, not a privilege — see
+    apps/accounts/developers.py for why the authority was put outside the
+    database, and ``developers.GRANT_MESSAGE`` for the refusal every write
+    surface gives.
+    """
+
     CLIENT = "client", "Client"
     STAFF = "staff", "Staff"
     ADMIN = "admin", "Admin"
+    DEVELOPER = "developer", "Developer"
+
+
+# Roles that get Django's `is_staff` (admin-site access) and `is_superuser`
+# (unconditional model permissions). Kept as module-level sets rather than
+# inline conditions in save() because apps/core/permissions.py and the tests
+# both need to name the same grouping, and a fourth role was exactly the kind of
+# addition that leaves one of three copies of `role in (...)` behind.
+STAFF_ROLES = frozenset({UserRole.STAFF, UserRole.ADMIN, UserRole.DEVELOPER})
+SUPERUSER_ROLES = frozenset({UserRole.ADMIN, UserRole.DEVELOPER})
 
 class UserManager(auth_models.BaseUserManager):
     def create_user(
@@ -61,10 +82,19 @@ class User(AttributedModel, auth_models.AbstractUser):
     password = models.CharField(max_length=255)
     username = None
 
+    # max_length 20, not 10: "developer" is 9 characters and fits either way,
+    # but 10 left exactly one spare and the next role name would have forced a
+    # column alter on a table every request touches. Widening a varchar is
+    # metadata-only in Postgres, so the headroom is free now and would not have
+    # been later.
     role = models.CharField(
-        max_length=10,
+        max_length=20,
         choices=UserRole.choices,
         default=UserRole.CLIENT,
+        help_text=(
+            "Developer is not assignable here — it mirrors the "
+            "PLATFORM_DEVELOPER_EMAILS deployment setting."
+        ),
     )
 
     force_password_change = models.BooleanField(default=False)
@@ -240,10 +270,52 @@ class User(AttributedModel, auth_models.AbstractUser):
                     {"timezone": f"{self.timezone!r} is not a known IANA timezone name."}
                 ) from None
 
+    # ── Developer protection ─────────────────────────────────────
+
+    @property
+    def is_developer(self) -> bool:
+        """Held by the addresses in ``settings.PLATFORM_DEVELOPER_EMAILS``.
+
+        A property over the env list, deliberately NOT ``self.role ==
+        DEVELOPER``. The column is administered by admins, who are
+        ``is_superuser`` and can therefore rewrite it; the env var is not. Every
+        permission decision reads this, so a rewritten column changes a label
+        and nothing else. apps/accounts/developers.py has the full reasoning.
+        """
+        from . import developers
+
+        return developers.is_developer_email(self.email)
+
     def save(self, *args, **kwargs):
         # Keep is_staff and is_superuser in sync with role
-        self.is_staff = self.role in (UserRole.STAFF, UserRole.ADMIN)
-        self.is_superuser = self.role == UserRole.ADMIN
+        self.is_staff = self.role in STAFF_ROLES
+        self.is_superuser = self.role in SUPERUSER_ROLES
+
+        # A developer's four privilege fields are derived, not stored: whatever
+        # the caller was about to write, the env list wins. This is the ORM-wide
+        # backstop behind the per-surface guards — an admin action, a serializer
+        # or a shell that reaches a save() at all cannot demote or deactivate a
+        # developer, even through a path nobody thought to guard.
+        #
+        # It runs AFTER the role sync above so it has the last word, and it
+        # corrects `role` itself, which is what keeps the mirror column honest
+        # without a scheduled job.
+        #
+        # Only ever *grants*, and only to addresses already in the env list, so
+        # it cannot be turned into an escalation: an attacker who could make
+        # this fire on their own account would need to have edited the
+        # deployment config first, at which point they did not need this.
+        if self.is_developer:
+            from . import developers
+
+            corrected = developers.apply_state(self)
+            # update_fields is an allow-list — a caller passing
+            # update_fields=["is_active"] to deactivate us would otherwise have
+            # the correction silently dropped on the way to the database.
+            update_fields = kwargs.get("update_fields")
+            if corrected and update_fields is not None:
+                kwargs["update_fields"] = list(set(update_fields) | set(corrected))
+
         super().save(*args, **kwargs)
 
     def __str__(self):

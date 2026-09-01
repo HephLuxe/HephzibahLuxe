@@ -23,24 +23,29 @@ force_authenticate and called directly — the same pattern accounts/tests.py us
 """
 
 import datetime
+import io
 from unittest import mock
 
+from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.core.files.storage import InMemoryStorage
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from PIL import Image
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from apps.core import background
 from apps.core.error_codes import CONFIRMATION_REQUIRED
 from apps.core.pagination import StandardPageNumberPagination
-from apps.events import views
-from apps.events.models import Event, EventDay
-from apps.events.serializers import EventSerializer
-from apps.events.services import schedule_event_details_notification
+from apps.core.utils import event_gallery_upload_path
+from apps.events import services, views
+from apps.events.models import Event, EventDay, EventImage
+from apps.events.serializers import EventDaySerializer, EventSerializer
+from apps.events.services import get_event_deletion_impact, schedule_event_details_notification
 from apps.events.tasks import dispatch_due_event_details_notifications
 from apps.notifications.models import Notification
-from apps.portal.models import ClientPortal
+from apps.portal.models import ClientPortal, EventEngagement
 
 User = get_user_model()
 factory = APIRequestFactory()
@@ -152,6 +157,10 @@ class EventImageUrlTests(TestCase):
     so the assertion is deterministic regardless of whether the .env has R2
     enabled — with R2 the URL is absolute either way; a relative-URL storage is
     exactly the case where the request context is what makes it absolute.
+
+    Asserted through the gallery now that `Event.featured_image` is gone, and
+    through `cover_image` specifically — that is the field callers read in its
+    place, so it is the one that has to come back absolute.
     """
 
     def setUp(self):
@@ -161,14 +170,17 @@ class EventImageUrlTests(TestCase):
         self.event = _make_event(self.client_user)
 
     def test_request_context_absolutizes_the_image_url(self):
-        field = Event._meta.get_field("featured_image")
+        field = EventImage._meta.get_field("image")
         with mock.patch.object(field, "storage", InMemoryStorage()):
             # The FieldFile captures field.storage at assignment — set it here.
-            self.event.featured_image = "portals/test/events/1-x/covers/cover.jpg"
-            without_ctx = EventSerializer(self.event).data["featured_image"]
+            EventImage.objects.create(
+                event=self.event, image="portals/test/events/1-x/gallery/a/cover.jpg",
+                is_primary=True,
+            )
+            without_ctx = EventSerializer(self.event).data["cover_image"]["image"]
             with_ctx = EventSerializer(
                 self.event, context={"request": factory.get("/")}
-            ).data["featured_image"]
+            ).data["cover_image"]["image"]
         self.assertTrue(without_ctx.startswith("/media/"))  # relative without a request
         self.assertTrue(with_ctx.startswith("http"))        # absolutized via the request
 
@@ -495,3 +507,512 @@ class EventListsAreAlwaysBoundedTests(TestCase):
 
         mine = self._get(views.getall_event, self.client_user)
         self.assertEqual(mine.data["count"], 12)
+
+
+class PublicPageCopyFieldTests(TestCase):
+    """
+    The public page renders three separate pieces of text per event day — eyebrow,
+    headline, narrative — and `EventDay` used to carry only two text columns, one
+    of which (`content`) had no defined meaning and no reader anywhere in the
+    codebase. So the headline had nowhere to live and never appeared in the API
+    response. These lock in the split.
+    """
+
+    def setUp(self):
+        self.staff = User.objects.create_user(
+            first_name="Win", last_name="Team", email="copystaff@example.com",
+            password="x", role="staff",
+        )
+        self.client_user = User.objects.create_user(
+            first_name="Ada", last_name="Obi", email="copyclient@example.com", password="x",
+        )
+        self.event = _make_event(self.client_user)
+
+    EYEBROW = "Pre-Birthday Photoshoot"
+    HEADLINE = "A Moment Before Fifty — A Pre-Birthday Portrait Experience"
+    NARRATIVE = (
+        "Before the celebrations began, there was a quiet moment to pause—to honour "
+        "the woman at the heart of it all and the milestone she was about to embrace.\n\n"
+        "Rather than relying on an elaborate setting, the experience remained "
+        "intentionally understated."
+    )
+
+    def test_an_event_day_round_trips_all_three_pieces_of_copy(self):
+        """The gap this closes: `headline` had no column, so a create that sent it
+        silently dropped it and the response came back without it."""
+        req = factory.post("/", {
+            "event_day_title": self.EYEBROW,
+            "headline": self.HEADLINE,
+            "content": self.NARRATIVE,
+            "date": "2026-11-27",
+        }, format="json")
+        force_authenticate(req, user=self.staff)
+        resp = views.create_eventday(req, event_slug=self.event.slug)
+
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data["event_day_title"], self.EYEBROW)
+        self.assertEqual(resp.data["headline"], self.HEADLINE)
+        self.assertEqual(resp.data["content"], self.NARRATIVE)
+
+        day = EventDay.objects.get(id=resp.data["id"])
+        self.assertEqual(day.headline, self.HEADLINE)
+
+    def test_the_headline_is_patchable_on_its_own(self):
+        day = EventDay.objects.create(
+            owner=self.event, event_day_title="Event No. 1", date=datetime.date(2026, 11, 27),
+        )
+        req = factory.patch("/", {"headline": self.HEADLINE}, format="json")
+        force_authenticate(req, user=self.staff)
+        resp = views.update_eventday(req, event_slug=self.event.slug, id=day.id)
+
+        self.assertEqual(resp.status_code, 200)
+        day.refresh_from_db()
+        self.assertEqual(day.headline, self.HEADLINE)
+        self.assertEqual(day.event_day_title, "Event No. 1")  # eyebrow untouched
+
+    def test_the_event_carries_its_own_headline_beside_the_derived_title(self):
+        """`Event.title` is generated from the celebrant names and the portal depends
+        on that mechanical form, so the editorial line needs a separate field rather
+        than overwriting it."""
+        req = factory.patch("/", {
+            "headline": "A Golden 50th: An Intimate Two-Day Celebration of Family, Faith & Joy",
+        }, format="json")
+        force_authenticate(req, user=self.staff)
+        resp = views.update_event(req, slug=self.event.slug)
+
+        self.assertEqual(resp.status_code, 200)
+        self.event.refresh_from_db()
+        self.assertEqual(
+            self.event.headline,
+            "A Golden 50th: An Intimate Two-Day Celebration of Family, Faith & Joy",
+        )
+        self.assertEqual(self.event.title, "Sam & Pris's Wedding")  # derived title intact
+
+    def test_short_legacy_content_values_are_still_valid(self):
+        """`content` was redefined as the long-form narrative rather than given a
+        sibling summary field. Rows written before it had a defined meaning hold
+        one-liners; those must not need a backfill."""
+        day = EventDay.objects.create(
+            owner=self.event, event_day_title="Traditional Wedding",
+            date=datetime.date(2026, 11, 27),
+            content="Traditional engagement ceremony with both families.",
+        )
+        day.full_clean()  # no length floor, no required headline
+
+    def test_day_number_does_not_match_the_public_numbering(self):
+        """Why the eyebrow is typed rather than derived: the photoshoot sorts first
+        by date but sits OUTSIDE the numbered sequence, so `day_number` would render
+        the first celebration day as 'No. 2'."""
+        shoot = EventDay.objects.create(
+            owner=self.event, event_day_title="Pre-Birthday Photoshoot",
+            date=datetime.date(2026, 11, 20),
+        )
+        first_celebration = EventDay.objects.create(
+            owner=self.event, event_day_title="Event No. 1",
+            date=datetime.date(2026, 11, 27),
+        )
+        self.assertEqual(shoot.day_number, 1)
+        self.assertEqual(first_celebration.day_number, 2)  # but it is labelled "No. 1"
+
+
+def _png(name="photo.png"):
+    """A real PNG — DRF's ImageField runs Pillow before any custom validation,
+    so junk bytes would be rejected for the wrong reason."""
+    buf = io.BytesIO()
+    Image.new("RGB", (2, 2)).save(buf, format="PNG")
+    return SimpleUploadedFile(name, buf.getvalue(), content_type="image/png")
+
+
+class EventGalleryTests(TestCase):
+    """
+    The gallery upgrade. `Event.featured_image` and `EventDay.event_images` each
+    held exactly ONE image, so staff had one shot at a cover and a day's
+    photographs had nowhere to live at all. Both are now EventImage rows, told
+    apart by whether `event_day` is set, with the `is_primary` row serving as the
+    cover the public page renders.
+    """
+
+    def setUp(self):
+        self.staff = User.objects.create_user(
+            first_name="Win", last_name="Team", email="gallerystaff@example.com",
+            password="x", role="staff",
+        )
+        self.client_user = User.objects.create_user(
+            first_name="Ada", last_name="Obi", email="galleryclient@example.com", password="x",
+        )
+        self.event = _make_event(self.client_user)
+        self.day = EventDay.objects.create(
+            owner=self.event, event_day_title="Pre-Birthday Photoshoot",
+            date=datetime.date(2026, 11, 20),
+        )
+
+    def _upload(self, files, event_day=None, user=None):
+        body = {"image": files}
+        if event_day:
+            body["event_day"] = str(event_day.id)
+        req = factory.post("/", body, format="multipart")
+        force_authenticate(req, user=user or self.staff)
+        return views.event_gallery(req, event_slug=self.event.slug)
+
+    # ── the shape of the thing ────────────────────────────────────────────────
+
+    def test_an_event_holds_many_images_and_one_is_the_cover(self):
+        resp = self._upload([_png("a.png"), _png("b.png"), _png("c.png")])
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(len(resp.data), 3)
+        self.assertEqual(self.event.images.count(), 3)
+        # The frontend renders one; staff keep the alternates.
+        self.assertEqual(self.event.images.filter(is_primary=True).count(), 1)
+
+    def test_a_day_holds_its_own_gallery_separate_from_the_events(self):
+        self._upload([_png("event.png")])
+        self._upload([_png("day1.png"), _png("day2.png")], event_day=self.day)
+
+        event_level = self.event.images.filter(event_day__isnull=True)
+        self.assertEqual(event_level.count(), 1)
+        self.assertEqual(self.day.images.count(), 2)
+
+        # The event's serialized gallery must NOT contain the day's photographs,
+        # or every day image would appear twice in one detail response.
+        data = EventSerializer(self.event, context={"request": factory.get("/")}).data
+        self.assertEqual(len(data["images"]), 1)
+        self.assertEqual(data["cover_image"]["id"], str(event_level.first().id))
+
+    def test_the_day_cover_is_the_days_primary_not_the_events(self):
+        self._upload([_png("event.png")])
+        self._upload([_png("day.png")], event_day=self.day)
+
+        day_data = EventDaySerializer(self.day, context={"request": factory.get("/")}).data
+        self.assertEqual(day_data["cover_image"]["id"], str(self.day.images.first().id))
+        self.assertTrue(day_data["cover_image"]["is_primary"])
+
+    def test_the_first_upload_becomes_the_cover_automatically(self):
+        """Otherwise an event with photographs but no primary renders an empty
+        tile — indistinguishable, to the frontend, from having no photographs."""
+        resp = self._upload([_png("only.png")])
+        self.assertTrue(resp.data[0]["is_primary"])
+
+    # ── the primary slot ─────────────────────────────────────────────────────
+
+    def test_promoting_a_new_cover_demotes_the_old_one(self):
+        """The two-row half of `is_primary`. A partial unique constraint refuses a
+        second primary, so a naive `is_primary = True` save would 500 instead of
+        swapping."""
+        self._upload([_png("a.png"), _png("b.png")])
+        first, second = list(self.event.images.all())
+        self.assertTrue(first.is_primary)
+
+        req = factory.patch("/", {"is_primary": True}, format="json")
+        force_authenticate(req, user=self.staff)
+        resp = views.event_gallery_image(req, event_slug=self.event.slug, image_id=second.id)
+
+        self.assertEqual(resp.status_code, 200)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertFalse(first.is_primary)
+        self.assertTrue(second.is_primary)
+        self.assertEqual(self.event.images.filter(is_primary=True).count(), 1)
+
+    def test_promoting_the_current_cover_is_a_no_op_not_a_wipe(self):
+        """Idempotence. Clearing the scope before setting the flag would leave the
+        gallery coverless if it didn't exclude the image being promoted."""
+        self._upload([_png("a.png")])
+        image = self.event.images.first()
+
+        services.set_primary_image(image)
+
+        image.refresh_from_db()
+        self.assertTrue(image.is_primary)
+
+    def test_an_event_primary_and_a_day_primary_do_not_compete(self):
+        """The `event_day__isnull=True` arm of the event constraint. Without it a
+        day cover would occupy its event's only primary slot."""
+        self._upload([_png("event.png")])
+        self._upload([_png("day.png")], event_day=self.day)
+
+        self.assertEqual(
+            self.event.images.filter(is_primary=True, event_day__isnull=True).count(), 1,
+        )
+        self.assertEqual(self.day.images.filter(is_primary=True).count(), 1)
+
+    def test_deleting_the_cover_promotes_the_next_image(self):
+        self._upload([_png("a.png"), _png("b.png")])
+        cover = self.event.images.get(is_primary=True)
+
+        req = factory.delete("/")
+        force_authenticate(req, user=self.staff)
+        resp = views.event_gallery_image(req, event_slug=self.event.slug, image_id=cover.id)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(self.event.images.count(), 1)
+        self.assertTrue(self.event.images.first().is_primary)
+
+    # ── ordering ─────────────────────────────────────────────────────────────
+
+    def test_uploads_queue_at_the_end_rather_than_colliding_on_zero(self):
+        self._upload([_png("a.png")])
+        self._upload([_png("b.png")])
+        self._upload([_png("c.png")])
+        self.assertEqual(
+            [i.sort_order for i in self.event.images.all()], [0, 1, 2],
+        )
+
+    def test_reorder_sets_the_whole_gallery_in_one_call(self):
+        self._upload([_png("a.png"), _png("b.png"), _png("c.png")])
+        ids = [str(i.id) for i in self.event.images.all()]
+        reversed_ids = list(reversed(ids))
+
+        req = factory.post("/", {"image_ids": reversed_ids}, format="json")
+        force_authenticate(req, user=self.staff)
+        resp = views.reorder_event_gallery(req, event_slug=self.event.slug)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual([img["id"] for img in resp.data], reversed_ids)
+
+    def test_a_partial_reorder_is_refused(self):
+        """A list missing an image would silently leave it at its old position,
+        which after a drag-and-drop is an order nobody asked for."""
+        self._upload([_png("a.png"), _png("b.png")])
+        one_id = str(self.event.images.first().id)
+
+        req = factory.post("/", {"image_ids": [one_id]}, format="json")
+        force_authenticate(req, user=self.staff)
+        resp = views.reorder_event_gallery(req, event_slug=self.event.slug)
+
+        self.assertEqual(resp.status_code, 400)
+
+    # ── scoping and permissions ──────────────────────────────────────────────
+
+    def test_an_image_cannot_be_attached_to_another_events_day(self):
+        """`event_day` is a bare id in the body; without a membership check it
+        would attach an image to any day on the platform."""
+        other_event = _make_event(self.client_user, title="Someone Else's Wedding")
+        foreign_day = EventDay.objects.create(
+            owner=other_event, event_day_title="Theirs", date=datetime.date(2027, 1, 1),
+        )
+        resp = self._upload([_png("a.png")], event_day=foreign_day)
+        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(EventImage.objects.count(), 0)
+
+    def test_an_image_from_another_event_is_not_reachable_by_id(self):
+        other_event = _make_event(self.client_user, title="Another Wedding")
+        foreign = EventImage.objects.create(event=other_event, image="x/y.png")
+
+        req = factory.delete("/")
+        force_authenticate(req, user=self.staff)
+        resp = views.event_gallery_image(
+            req, event_slug=self.event.slug, image_id=foreign.id,
+        )
+        self.assertEqual(resp.status_code, 404)
+        self.assertTrue(EventImage.objects.filter(pk=foreign.pk).exists())
+
+    def test_a_batch_with_one_bad_file_uploads_none_of_it(self):
+        """Validated as a set, so the caller isn't left guessing how many of five
+        photographs landed.
+
+        The bad file is junk bytes rather than an oversized one: inflating
+        `.size` (how core/tests.py reaches the ceiling) does not survive
+        APIRequestFactory, which encodes the upload into a body that DRF then
+        re-parses at its true size. The size ceiling itself is covered in
+        core/tests.py at the serializer; what matters here is that ANY invalid
+        file in the batch stops the whole batch.
+        """
+        junk = SimpleUploadedFile("broken.png", b"not an image", content_type="image/png")
+        resp = self._upload([_png("fine.png"), junk])
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(self.event.images.count(), 0)
+
+    def test_an_upload_with_no_file_is_a_400_not_a_201(self):
+        req = factory.post("/", {}, format="multipart")
+        force_authenticate(req, user=self.staff)
+        resp = views.event_gallery(req, event_slug=self.event.slug)
+        self.assertEqual(resp.status_code, 400)
+
+    def test_a_locked_event_refuses_client_uploads_but_not_staff(self):
+        portal = ClientPortal.objects.get(user=self.client_user)
+        EventEngagement.objects.create(
+            portal=portal, event=self.event, is_active=True, event_details_locked=True,
+        )
+
+        blocked = self._upload([_png("a.png")], user=self.client_user)
+        self.assertEqual(blocked.status_code, 403)
+
+        allowed = self._upload([_png("a.png")], user=self.staff)
+        self.assertEqual(allowed.status_code, 201)
+
+    # ── cascades ─────────────────────────────────────────────────────────────
+
+    def test_deleting_a_day_takes_only_its_own_images(self):
+        self._upload([_png("event.png")])
+        self._upload([_png("day.png")], event_day=self.day)
+
+        self.day.delete()
+
+        self.assertEqual(EventImage.objects.count(), 1)
+        self.assertIsNone(EventImage.objects.first().event_day_id)
+
+    def test_deleting_the_event_takes_both_galleries(self):
+        self._upload([_png("event.png")])
+        self._upload([_png("day.png")], event_day=self.day)
+
+        self.event.delete()
+
+        self.assertEqual(EventImage.objects.count(), 0)
+
+    def test_the_delete_preview_counts_gallery_images(self):
+        self._upload([_png("event.png")])
+        self._upload([_png("day.png")], event_day=self.day)
+
+        impact = get_event_deletion_impact(self.event)
+        # Both galleries cascade from `event`, so one count covers both — the day
+        # image must not be tallied twice.
+        self.assertEqual(impact["event_images"], 2)
+
+
+class EventImageStoragePathTests(TestCase):
+    """
+    The retired single-image fields resolved to a CONSTANT name
+    (`covers/cover.jpg`, `days/<id>/images/image.jpg`). Fine for one file; for a
+    gallery, every row would resolve to the same path and the storage backend
+    would quietly append a random suffix to each, leaving blobs with no stable
+    mapping back to a row.
+    """
+
+    def setUp(self):
+        self.client_user = User.objects.create_user(
+            first_name="Ada", last_name="Obi", email="pathclient@example.com", password="x",
+        )
+        self.event = _make_event(self.client_user)
+        self.day = EventDay.objects.create(
+            owner=self.event, event_day_title="Day", date=datetime.date(2026, 11, 20),
+        )
+
+    def test_each_image_gets_its_own_path_segment(self):
+        a = EventImage(event=self.event)
+        b = EventImage(event=self.event)
+        path_a = event_gallery_upload_path(a, "photo.png")
+        path_b = event_gallery_upload_path(b, "photo.png")
+
+        self.assertNotEqual(path_a, path_b)
+        self.assertIn(str(a.pk), path_a)
+        self.assertIn("photo.png", path_a)  # original filename preserved
+
+    def test_a_day_image_lands_under_its_day(self):
+        image = EventImage(event=self.event, event_day=self.day)
+        path = event_gallery_upload_path(image, "photo.png")
+        self.assertIn(f"days/{self.day.pk}/gallery/", path)
+
+    def test_an_event_image_lands_outside_any_day(self):
+        image = EventImage(event=self.event)
+        path = event_gallery_upload_path(image, "photo.png")
+        self.assertIn("/gallery/", path)
+        self.assertNotIn("/days/", path)
+
+
+@override_settings(USE_R2_STORAGE=False)
+class EventImageBlobCleanupTests(TestCase):
+    """
+    The gap this closes: `Event.featured_image` and `EventDay.event_images` had NO
+    post_delete receiver, so deleting an event left its cover in the bucket for
+    ever. Survivable at one blob per event; a gallery of dozens per event is not.
+
+    The cascade cases are the point. Django's "fast delete" optimisation skips
+    per-row signals when it can delete a table in one statement — registering a
+    post_delete receiver is what forces it off for this model, so these assert
+    the receiver fires on paths that never touch view code.
+    """
+
+    def setUp(self):
+        self.client_user = User.objects.create_user(
+            first_name="Ada", last_name="Obi", email="blobclient@example.com", password="x",
+        )
+        self.event = _make_event(self.client_user)
+        self.day = EventDay.objects.create(
+            owner=self.event, event_day_title="Day", date=datetime.date(2026, 11, 20),
+        )
+
+    def _image(self, event_day=None):
+        image = EventImage(event=self.event, event_day=event_day)
+        image.image.save("photo.png", _png(), save=True)
+        return image
+
+    def test_deleting_a_row_deletes_its_blob(self):
+        image = self._image()
+        name, storage = image.image.name, image.image.storage
+        self.assertTrue(storage.exists(name))
+
+        with self.captureOnCommitCallbacks(execute=True):
+            image.delete()
+
+        self.assertFalse(storage.exists(name))
+
+    def test_deleting_the_event_deletes_every_blob_in_both_galleries(self):
+        event_level = self._image()
+        day_level = self._image(event_day=self.day)
+        names = [(i.image.name, i.image.storage) for i in (event_level, day_level)]
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.event.delete()
+
+        for name, storage in names:
+            self.assertFalse(storage.exists(name), f"{name} survived the cascade")
+
+    def test_deleting_a_day_deletes_its_blobs(self):
+        day_level = self._image(event_day=self.day)
+        name, storage = day_level.image.name, day_level.image.storage
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.day.delete()
+
+        self.assertFalse(storage.exists(name))
+
+    def test_a_rolled_back_delete_leaves_the_blob_alone(self):
+        """Storage is not transactional, so the blob delete is deferred to
+        on_commit. If it ran inline, a rollback would restore the row and leave it
+        pointing at a file that no longer exists."""
+        image = self._image()
+        name, storage = image.image.name, image.image.storage
+
+        with self.captureOnCommitCallbacks(execute=False):
+            image.delete()
+
+        self.assertTrue(storage.exists(name))
+
+
+class AdminFormsBuildTests(TestCase):
+    """
+    Renaming or removing a model field leaves any admin `fieldsets` entry naming
+    it stale, and `manage.py check` does NOT catch it — Django can't tell an
+    unknown field from a callable or a readonly attribute at check time, so it
+    passes and then raises FieldError when the change page builds its form. This
+    change removed two fields and hit exactly that: EventAdmin kept
+    `featured_image` in a fieldset and `check` reported no issues.
+
+    Building the form is what raises, so that is what this does.
+    """
+
+    def test_every_events_admin_form_builds(self):
+        for model in (Event, EventDay, EventImage):
+            with self.subTest(model=model.__name__):
+                admin.site._registry[model].get_form(None)()
+
+    def test_the_inlines_build_too(self):
+        """Inlines have their own `fields` and are missed by the check above.
+
+        A real request is needed here, not None: get_formset consults
+        has_delete_permission, which reads request.user.
+        """
+        superuser = User.objects.create_superuser(
+            email="adminforms@example.com", password="x",
+            first_name="Root", last_name="User",
+        )
+        request = factory.get("/")
+        request.user = superuser
+
+        for model in (Event, EventDay):
+            model_admin = admin.site._registry[model]
+            for inline_cls in model_admin.inlines:
+                with self.subTest(inline=inline_cls.__name__):
+                    inline = inline_cls(model_admin.model, admin.site)
+                    inline.get_formset(request)

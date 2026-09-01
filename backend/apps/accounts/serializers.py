@@ -299,10 +299,59 @@ class AdminUserCreationSerializer(serializers.ModelSerializer):
     """
     Serializer for admin-only user creation.
     Generates temporary password and sends credentials email.
+
+    ``role`` is caller-supplied, which is why ``validate_role`` below exists:
+    without it, POST /users/register/ with ``{"role": "developer"}`` was an
+    escalation path open to every staff account on the platform.
     """
     class Meta:
         model = User
         fields = ['email', 'first_name', 'last_name', 'role']
+
+    def validate_role(self, value):
+        """Refuse to mint a developer from the API.
+
+        Two separate refusals, both needed:
+
+        * **Creating an account with role=developer** at an address that is not
+          in ``PLATFORM_DEVELOPER_EMAILS`` produces a row wearing a privilege it
+          does not have. Harmless to security (nothing reads the column to
+          authorise) but actively misleading in the admin, which is worse than a
+          400 — an operator would believe someone holds a role they do not.
+        * **Creating an account AT a configured developer address**, whatever
+          role was asked for, is the real attack: an admin registers
+          ``you@yourdomain.com``, the temporary-password email lands in *their*
+          inbox because they chose the address... except they cannot, since
+          ``email`` is unique and the real account already holds it. What they
+          CAN do is get there first on a fresh deploy, or after the developer
+          row is somehow gone. Refusing the address outright closes both.
+
+        Only a developer can do either, and a developer would use
+        ``manage.py ensure_developer``.
+        """
+        from . import developers
+        from .models import UserRole
+
+        actor = getattr(self.context.get("request"), "user", None)
+        if value == UserRole.DEVELOPER and not developers.is_developer(actor):
+            raise serializers.ValidationError(developers.GRANT_MESSAGE)
+        return value
+
+    def validate_email(self, value):
+        """A configured developer address may only be registered by a developer.
+
+        See ``validate_role`` — this is the half that does not depend on which
+        role the caller asked for.
+        """
+        from . import developers
+
+        actor = getattr(self.context.get("request"), "user", None)
+        if developers.is_developer_email(value) and not developers.is_developer(actor):
+            raise serializers.ValidationError(
+                "This address is reserved for a protected developer account and "
+                "cannot be registered here."
+            )
+        return value
 
     def create(self, validated_data: dict) -> User:
         """Create user with temporary password"""

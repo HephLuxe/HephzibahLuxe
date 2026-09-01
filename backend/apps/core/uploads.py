@@ -7,7 +7,8 @@ The hole this closes
 --------------------
 This used to be a check per serializer, and there were two of them for eleven
 fields. ``meetings`` validated type and size; ``budgets`` validated type only.
-``Contact.photo``, ``Event.featured_image``, ``EventDay.event_images``,
+``Contact.photo``, the event/event-day gallery images (then a single
+``Event.featured_image`` / ``EventDay.event_images`` apiece),
 ``TeamMember.photo`` and the five ``document_hub`` FileFields validated neither
 — so a 500MB file was a valid upload, and three of those fields are writable by
 a **client**, not just staff.

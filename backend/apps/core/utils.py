@@ -134,6 +134,41 @@ def event_image_upload_path(instance, filename):
     return f"portals/{portal_id}/events/{event_id}-{slug}/days/{day_id}/images/image{ext}"
 
 
+def event_gallery_upload_path(instance, filename):
+    """
+    instance = EventImage
+
+    Event-level gallery:
+      portals/{portal_id}/events/{event_id}-{event_slug}/gallery/{image_id}/{filename}
+    Day-level gallery:
+      portals/{portal_id}/events/{event_id}-{event_slug}/days/{day_id}/gallery/{image_id}/{filename}
+
+    Two things differ from the single-image paths above, both because this field
+    holds MANY rows rather than one:
+
+      * The row's own id is a path segment. ``event_cover_upload_path`` can get
+        away with the constant name ``covers/cover.jpg`` because there is only
+        ever one; N rows all resolving to one name would collide, and the
+        storage backend would silently append a random suffix to each — leaving
+        a folder of ``image_a7Kq2.jpg`` blobs with no stable way back to a row.
+      * The uploaded filename is preserved rather than replaced, matching the
+        other multi-row fields (``prep_upload_path``, the document hub). The id
+        segment already guarantees uniqueness, so the name is free to stay
+        recognisable to whoever uploaded it.
+    """
+    portal_id = _safe_portal_id(instance)
+    event = getattr(instance, "event", None)
+    event_id = getattr(event, "pk", None) or "new"
+    slug = getattr(event, "slug", None) or "no-slug"
+    image_id = instance.pk or "new"
+
+    base = f"portals/{portal_id}/events/{event_id}-{slug}"
+    day_id = getattr(instance, "event_day_id", None)
+    if day_id:
+        return f"{base}/days/{day_id}/gallery/{image_id}/{filename}"
+    return f"{base}/gallery/{image_id}/{filename}"
+
+
 # ── Contacts ─────────────────────────────────────────────────────
 
 def contact_photo_upload_path(instance, filename):

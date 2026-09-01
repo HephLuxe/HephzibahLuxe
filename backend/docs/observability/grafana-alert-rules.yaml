@@ -67,6 +67,60 @@ groups:
               expression: QUERY
               conditions:
                 - evaluator: { type: gt, params: [0] }
+      - uid: heph-developer-account-repaired
+        title: A protected developer account was repaired
+        condition: THRESHOLD
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Someone demoted or deactivated the platform developer"
+          description: "A developer account listed in PLATFORM_DEVELOPER_EMAILS had its role, is_active or is_superuser changed, and the platform reverted it. Nobody was locked out — which is why this pages rather than sits on a dashboard: the write succeeded at the database and this log line is the only trace it happened. Check the `fields` label for what was changed and the admin's history for who. Must be zero. See docs/adr/0004-protected-developer-role.md."
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: QUERY
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: LOKI_DATASOURCE_UID
+            model:
+              refId: QUERY
+              queryType: instant
+              expr: 'sum(count_over_time({service="hephzibah-api"} | json | event=`developer_account_repaired` [600s]))'
+          - refId: THRESHOLD
+            datasourceUid: __expr__
+            model:
+              refId: THRESHOLD
+              type: threshold
+              expression: QUERY
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+      - uid: heph-developer-account-delete-blocked
+        title: Deletion of a protected developer account was blocked
+        condition: THRESHOLD
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Something tried to delete the platform developer account"
+          description: "The pre_delete guard aborted a transaction that would have removed a developer account. Three layers refuse before this one is reachable (the admin hides the button, has_delete_permission refuses, the bulk action filters the row), so reaching it means a shell session, a raw ORM call, or an unanticipated cascade. Must be zero."
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: QUERY
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: LOKI_DATASOURCE_UID
+            model:
+              refId: QUERY
+              queryType: instant
+              expr: 'sum(count_over_time({service="hephzibah-api"} | json | event=`developer_account_delete_blocked` [600s]))'
+          - refId: THRESHOLD
+            datasourceUid: __expr__
+            model:
+              refId: THRESHOLD
+              type: threshold
+              expression: QUERY
+              conditions:
+                - evaluator: { type: gt, params: [0] }
       - uid: heph-brevo-outage
         title: Brevo outage detected
         condition: THRESHOLD

@@ -20,4 +20,11 @@ urlpatterns = [
     path('event/<slug:event_slug>/event_day/', views.getall_eventday_slug, name='getall_eventday_slug'),  # GET
     path('event/<slug:event_slug>/event_day/<uuid:id>/', views.update_eventday, name='update_eventday'),  # PUT|PATCH
     path('event/<slug:event_slug>/event_day/delete/<uuid:id>/', views.delete_eventday, name='delete_eventday'),  # DELETE
+
+    # Gallery. One route family for both levels — omit `event_day` for the
+    # event's own images, pass it (query param on GET, body on writes) for a
+    # day's. See the GALLERY block in views.py.
+    path('event/<slug:event_slug>/images/', views.event_gallery, name='event_gallery'),  # GET|POST
+    path('event/<slug:event_slug>/images/reorder/', views.reorder_event_gallery, name='reorder_event_gallery'),  # POST
+    path('event/<slug:event_slug>/images/<uuid:image_id>/', views.event_gallery_image, name='event_gallery_image'),  # PATCH|DELETE
 ]

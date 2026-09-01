@@ -37,6 +37,13 @@ locked door. Two admin-independent paths exist and both must stay working:
   2. The password-reset flow, which clears the lock on a completed reset and
      delivers its code to an inbox an attacker cannot read.
 
+A ``developer`` account (apps/accounts/developers.py) is subject to both of the
+above — the lock is about guessing, not about privilege, and exempting the
+highest-value account from it would be exactly backwards. What a developer is
+exempt from is *demotion*: this view repairs a drifted developer row before
+authenticating, so an admin who deactivated them cannot also keep them out of
+the recovery path.
+
 Superusers are **not** exempt. They are the highest-value target, so exempting
 them would defeat the control; the two recovery paths above are what make that
 safe rather than reckless.
@@ -52,7 +59,7 @@ from django.http import HttpResponseRedirect
 from django.views.decorators.cache import never_cache
 from django_ratelimit.exceptions import Ratelimited
 
-from apps.accounts import login_guard
+from apps.accounts import developers, login_guard
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +104,12 @@ def guarded_admin_login(request, extra_context=None):
         exc = Ratelimited()
         exc.retry_after = full["retry_after"]
         raise exc
+
+    # Mirrors MyTokenObtainPairView: repair a drifted developer row before
+    # anything reads `is_active` off it. The admin is the surface an admin uses
+    # to demote people, so it is the one where a locked-out developer would most
+    # plausibly be trying to get back in.
+    developers.repair_by_email(email)
 
     user = get_user_model().objects.filter(email=email).first() if email else None
 

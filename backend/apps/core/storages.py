@@ -10,14 +10,14 @@ don't share one URL scheme:
     / ``AWS_QUERYSTRING_EXPIRE``, see config/settings.py). A leaked or shared
     link stops working once it expires. Nothing here changes that.
 
-  * **Display images** (``Event.featured_image``, ``EventDay.event_images``,
-    ``EventContact.photo``) are shown inline by the frontend and are routinely
+  * **Display images** (``EventImage.image`` — the event and event-day galleries —
+    and ``EventContact.photo``) are shown inline by the frontend and are routinely
     cached in an already-fetched event JSON payload. A 1-hour signed URL would
     turn into a broken image an hour after the page was loaded. So these are
     served from a dedicated **public** bucket / custom domain with **unsigned,
     long-lived** URLs via ``PublicMediaStorage`` below.
 
-Wiring: the three image fields use ``storage=select_public_media_storage``.
+Wiring: those image fields use ``storage=select_public_media_storage``.
 Because that's a *callable*, Django records only the reference in migrations and
 resolves the actual backend at boot from the current settings — so flipping
 ``USE_R2_STORAGE`` (or configuring a public bucket later) needs no new migration.

@@ -1,7 +1,8 @@
 import logging
 
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -19,8 +20,8 @@ from apps.portal.models import ClientPortal, EventEngagement
 
 from ..core.permissions import IsStaffOrSuperuser, can_access_event, enforce, is_staff_or_superuser
 from . import services
-from .models import Event, EventDay
-from .serializers import EventDaySerializer, EventSerializer
+from .models import Event, EventDay, EventImage
+from .serializers import EventDaySerializer, EventImageSerializer, EventSerializer
 from .services import build_event_detail, generate_event_title, get_event_deletion_impact
 
 logger = logging.getLogger(__name__)
@@ -210,9 +211,9 @@ def getall_event(request):
     Staff/superusers see every event. Clients see only their own events.
     """
     if is_staff_or_superuser(request.user):
-        events = Event.objects.select_related("celebrant").all()
+        events = Event.objects.select_related("celebrant").prefetch_related("images").all()
     else:
-        events = Event.objects.select_related("celebrant").filter(celebrant=request.user)
+        events = Event.objects.select_related("celebrant").prefetch_related("images").filter(celebrant=request.user)
 
     return _list_response(request, events, EventSerializer)
 
@@ -232,7 +233,7 @@ def getall_event_email(request, email):
 
     enforce(is_staff_or_superuser(request.user) or request.user == user, "You don't have permission to view this user's events")
 
-    events = Event.objects.select_related("celebrant").filter(celebrant=user)
+    events = Event.objects.select_related("celebrant").prefetch_related("images").filter(celebrant=user)
     return Response(
         EventSerializer(events, many=True, context={"request": request}).data,
         status=status.HTTP_200_OK,
@@ -393,9 +394,9 @@ def getall_eventday(request):
     Staff/superusers see every event day. Clients see only days belonging to their own events.
     """
     if is_staff_or_superuser(request.user):
-        eventdays = EventDay.objects.select_related("owner", "owner__celebrant").all()
+        eventdays = EventDay.objects.select_related("owner", "owner__celebrant").prefetch_related("images").all()
     else:
-        eventdays = EventDay.objects.select_related("owner", "owner__celebrant").filter(
+        eventdays = EventDay.objects.select_related("owner", "owner__celebrant").prefetch_related("images").filter(
             owner__celebrant=request.user
         )
 
@@ -417,7 +418,7 @@ def getall_eventday_email(request, email):
 
     enforce(is_staff_or_superuser(request.user) or request.user == user)
 
-    event_days = EventDay.objects.select_related("owner", "owner__celebrant").filter(
+    event_days = EventDay.objects.select_related("owner", "owner__celebrant").prefetch_related("images").filter(
         owner__celebrant=user
     )
     return Response(
@@ -462,7 +463,7 @@ def getall_eventday_slug(request, event_slug):
 
     return Response(
         EventDaySerializer(
-            event.days.select_related("owner").all(), many=True, context={"request": request}
+            event.days.select_related("owner").prefetch_related("images").all(), many=True, context={"request": request}
         ).data,
         status=status.HTTP_200_OK,
     )
@@ -517,3 +518,248 @@ def delete_eventday(request, event_slug, id):
 
     eventday.delete()
     return Response({"detail": "Event Day deleted successfully."}, status=status.HTTP_200_OK)
+
+
+###############################################     GALLERY       ###############################################
+#
+# One set of routes for both galleries rather than two parallel sets: every
+# EventImage carries `event`, so the event slug in the URL is always the scope
+# that matters for permissions, and `event_day` in the body (or `?event_day=`
+# on the read) narrows it to a day. Two route families would have duplicated
+# the lookup, the permission check and the lock gate four more times.
+
+
+def _resolve_gallery_scope(event, raw_day_id):
+    """
+    Turn a request's `event_day` value into an EventDay of THIS event, or None
+    for the event-level gallery.
+
+    Returns (event_day, error_response). The membership check is the reason this
+    isn't inlined: without it a caller could attach an image to any day on the
+    platform by naming its id, since the day id is the only thing identifying the
+    target and it isn't otherwise tied to the slug in the URL.
+    """
+    if raw_day_id in (None, "", "null"):
+        return None, None
+    try:
+        return EventDay.objects.get(id=raw_day_id, owner=event), None
+    except (EventDay.DoesNotExist, ValidationError, ValueError, TypeError):
+        return None, _error(
+            "Event Day not found or doesn't belong to this event.",
+            NOT_FOUND, status.HTTP_404_NOT_FOUND,
+        )
+
+
+def _gallery_queryset(event, event_day):
+    qs = EventImage.objects.filter(event=event)
+    return qs.filter(event_day=event_day) if event_day else qs.filter(event_day__isnull=True)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def event_gallery(request, event_slug):
+    """
+    GET  — list a gallery. `?event_day=<uuid>` for a day's images, omitted for
+           the event's own. Not paginated: a gallery is a page's worth of photos
+           by construction, and the frontend needs all of them to lay out the
+           grid, so splitting it across requests would only cause the page to
+           render in pieces.
+    POST — upload one or more images (multipart, repeat the `image` key per
+           file). `event_day` in the body targets a day's gallery.
+
+    Staff can always write. The celebrant can too, unless staff has set
+    event_details_locked — the same gate as editing the event itself, because a
+    locked event whose photographs are still replaceable isn't locked.
+    """
+    try:
+        event = Event.objects.get(slug=event_slug)
+    except Event.DoesNotExist:
+        return _error("Event with this title does not exist.", NOT_FOUND, status.HTTP_404_NOT_FOUND)
+
+    enforce(can_access_event(request.user, event), "You don't have permission to access this event")
+
+    if request.method == 'GET':
+        event_day, error = _resolve_gallery_scope(event, request.query_params.get("event_day"))
+        if error:
+            return error
+        images = _gallery_queryset(event, event_day)
+        return Response(
+            EventImageSerializer(images, many=True, context={"request": request}).data,
+        )
+
+    if not is_staff_or_superuser(request.user) and _event_details_locked_for_event(event):
+        return _locked_error()
+
+    event_day, error = _resolve_gallery_scope(event, request.data.get("event_day"))
+    if error:
+        return error
+
+    files = request.FILES.getlist("image")
+    if not files:
+        return _error(
+            "No image supplied. Send one or more files under the `image` key.",
+            VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Validate every file BEFORE saving any of them, so a batch with one
+    # oversized photo is refused whole rather than leaving the first few
+    # uploaded and the caller unsure how far it got.
+    serializers_ = []
+    for index, upload in enumerate(files):
+        serializer = EventImageSerializer(
+            data={"image": upload, "alt_text": request.data.get("alt_text", "")},
+            context={"request": request},
+        )
+        if not serializer.is_valid():
+            return _error(
+                f"Invalid image at position {index + 1}.",
+                VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST, errors=serializer.errors,
+            )
+        serializers_.append(serializer)
+
+    created = []
+    with transaction.atomic():
+        for serializer in serializers_:
+            created.append(save_with_attribution(
+                serializer, request.user,
+                event=event, event_day=event_day,
+                sort_order=services.next_sort_order(event, event_day),
+            ))
+        services.ensure_gallery_has_a_cover(event, event_day)
+
+    for image in created:
+        image.refresh_from_db()
+
+    services.schedule_event_details_notification(event, _gallery_change_description(event_day))
+    return Response(
+        EventImageSerializer(created, many=True, context={"request": request}).data,
+        status=status.HTTP_201_CREATED,
+    )
+
+
+def _gallery_change_description(event_day) -> str:
+    if event_day:
+        return f"Photographs for {event_day.event_day_title or 'an event day'}"
+    return "Event photographs"
+
+
+@api_view(['PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def event_gallery_image(request, event_slug, image_id):
+    """
+    PATCH  — edit one image: `alt_text`, `sort_order`, or `is_primary: true` to
+             make it the gallery cover. Promotion goes through
+             services.set_primary_image so the previous cover is demoted in the
+             same transaction; setting the flag directly would trip the partial
+             unique constraint.
+    DELETE — remove the image and its stored blob (the blob via the post_delete
+             receiver in signals.py). If it was the cover, the next image in the
+             gallery is promoted so the event/day doesn't render coverless.
+
+    Unlike delete_eventday, a client may delete their own images when the event
+    is unlocked — a photograph is content they supplied, not scheduling data,
+    and the event day it hangs off survives.
+    """
+    try:
+        event = Event.objects.get(slug=event_slug)
+        image = EventImage.objects.select_related("event", "event_day").get(
+            id=image_id, event=event,
+        )
+    except (Event.DoesNotExist, EventImage.DoesNotExist):
+        return _error(
+            "Image not found or doesn't belong to this event.",
+            NOT_FOUND, status.HTTP_404_NOT_FOUND,
+        )
+
+    enforce(can_access_event(request.user, event), "You don't have permission to modify this image")
+
+    if not is_staff_or_superuser(request.user) and _event_details_locked_for_event(event):
+        return _locked_error()
+
+    event_day = image.event_day
+
+    if request.method == 'DELETE':
+        image.delete()
+        services.ensure_gallery_has_a_cover(event, event_day)
+        services.schedule_event_details_notification(event, _gallery_change_description(event_day))
+        return Response({"detail": "Image deleted successfully."}, status=status.HTTP_200_OK)
+
+    data = {k: v for k, v in request.data.items() if k in ("alt_text", "sort_order")}
+    serializer = EventImageSerializer(
+        image, data=data, partial=True, context={"request": request},
+    )
+    if not serializer.is_valid():
+        return _error("Invalid image data.", VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST, errors=serializer.errors)
+
+    save_with_attribution(serializer, request.user)
+
+    # is_primary is handled apart from the serializer because promotion is a
+    # two-row operation, not a field assignment.
+    if str(request.data.get("is_primary", "")).lower() in ("true", "1"):
+        services.set_primary_image(image)
+        image.refresh_from_db()
+
+    services.schedule_event_details_notification(event, _gallery_change_description(event_day))
+    return Response(
+        EventImageSerializer(image, context={"request": request}).data,
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def reorder_event_gallery(request, event_slug):
+    """
+    POST — set the display order of a whole gallery in one call:
+    `{"image_ids": ["<uuid>", "<uuid>", ...]}`, position in the list becoming
+    sort_order.
+
+    One endpoint rather than N PATCHes because a drag-and-drop reorder changes
+    every position at once: sent one at a time the gallery passes through
+    orders that are briefly wrong, and a failure halfway leaves it scrambled
+    with no way to tell which half applied. Every id must belong to the same
+    gallery, so a partial or padded list is a 400 rather than a silent no-op.
+    """
+    try:
+        event = Event.objects.get(slug=event_slug)
+    except Event.DoesNotExist:
+        return _error("Event with this title does not exist.", NOT_FOUND, status.HTTP_404_NOT_FOUND)
+
+    enforce(can_access_event(request.user, event), "You don't have permission to modify this event")
+
+    if not is_staff_or_superuser(request.user) and _event_details_locked_for_event(event):
+        return _locked_error()
+
+    event_day, error = _resolve_gallery_scope(event, request.data.get("event_day"))
+    if error:
+        return error
+
+    image_ids = request.data.get("image_ids")
+    if not isinstance(image_ids, list) or not image_ids:
+        return _error(
+            "Send `image_ids` as a non-empty list of image ids in the desired order.",
+            VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST,
+        )
+
+    gallery = {str(img.id): img for img in _gallery_queryset(event, event_day)}
+    submitted = [str(i) for i in image_ids]
+
+    if set(submitted) != set(gallery) or len(submitted) != len(gallery):
+        return _error(
+            "`image_ids` must list every image in this gallery exactly once.",
+            VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST,
+        )
+
+    with transaction.atomic():
+        for position, image_id in enumerate(submitted):
+            image = gallery[image_id]
+            image.sort_order = position
+            image.save(update_fields=["sort_order", "updated_at"])
+
+    services.schedule_event_details_notification(event, _gallery_change_description(event_day))
+    return Response(
+        EventImageSerializer(
+            _gallery_queryset(event, event_day), many=True, context={"request": request},
+        ).data,
+        status=status.HTTP_200_OK,
+    )

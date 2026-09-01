@@ -3,6 +3,8 @@
 import uuid
 from datetime import timedelta
 
+from django.db import transaction
+from django.db.models import Max, Q
 from django.utils import timezone
 
 
@@ -141,7 +143,8 @@ def build_event_detail(event, request=None) -> dict:
     return {
         "event": EventSerializer(event, context={"request": request}).data,
         "event_days": EventDaySerializer(
-            event.days.select_related("owner").all(), many=True, context={"request": request}
+            event.days.select_related("owner").prefetch_related("images").all(),
+            many=True, context={"request": request},
         ).data,
         "contacts": contacts_by_category,
         "contacts_summary": counts,
@@ -161,6 +164,9 @@ def get_event_deletion_impact(event) -> dict:
     impact = {
         "event_days": event.days.count(),
         "event_contacts": event.contacts.count(),
+        # Both galleries: EventImage cascades from `event` directly, so day-level
+        # rows are already covered by this one count and must not be added twice.
+        "event_images": event.images.count(),
     }
 
     budget = getattr(event, "budget", None)
@@ -208,3 +214,89 @@ def generate_event_title(event_type: str, data: dict) -> tuple[str | None, str |
         return name, None
     else:
         return None, "Valid event_type is required."
+
+
+# ── Event gallery ────────────────────────────────────────────────────────────
+#
+# `is_primary` is guarded by two partial unique constraints (see
+# EventImage.Meta), so the database will refuse a second primary in a scope
+# outright. That is the right floor, but on its own it turns an ordinary staff
+# action — "make this one the cover" — into an IntegrityError, because setting
+# the new primary and clearing the old one are two statements and the constraint
+# is checked between them. Everything that writes the flag therefore goes
+# through here, where the pair runs in one transaction in the order the
+# constraint tolerates: clear first, then set.
+
+def _gallery_scope(image) -> Q:
+    """
+    The other images `image` competes with for the primary slot: its day's
+    gallery if it belongs to a day, otherwise its event's event-level images.
+    """
+    if image.event_day_id:
+        return Q(event_day_id=image.event_day_id)
+    return Q(event_id=image.event_id, event_day__isnull=True)
+
+
+def set_primary_image(image):
+    """
+    Make `image` the cover of its gallery, demoting whichever image held the slot.
+
+    Clearing before setting matters: doing it the other way round trips
+    unique_primary_image_per_event(_day) at the moment two rows are flagged, even
+    though the end state is legal. Excluding self keeps this idempotent — calling
+    it on the image that is already primary must not clear the flag and leave the
+    gallery with no cover at all.
+    """
+    from .models import EventImage
+
+    with transaction.atomic():
+        EventImage.objects.filter(_gallery_scope(image)).exclude(pk=image.pk).filter(
+            is_primary=True,
+        ).update(is_primary=False)
+        if not image.is_primary:
+            image.is_primary = True
+            image.save(update_fields=["is_primary", "updated_at"])
+    return image
+
+
+def next_sort_order(event, event_day=None) -> int:
+    """
+    One past the highest sort_order in the target gallery, so an upload lands at
+    the end rather than colliding at the default 0 (where ordering would fall
+    back to upload time and any later reorder would look arbitrary).
+    """
+    from .models import EventImage
+
+    scope = (
+        Q(event_day_id=event_day.pk) if event_day
+        else Q(event_id=event.pk, event_day__isnull=True)
+    )
+    current = EventImage.objects.filter(scope).aggregate(top=Max("sort_order"))["top"]
+    return 0 if current is None else current + 1
+
+
+def ensure_gallery_has_a_cover(event, event_day=None) -> None:
+    """
+    Promote the first image of a gallery to primary when nothing holds the slot.
+
+    Called after an upload and after a delete. Without it the two states that
+    look identical to the frontend — "no images" and "images, but the primary was
+    deleted" — behave differently: the second renders an empty tile on the
+    portfolio index even though photographs exist. `cover_image` also falls back
+    to the first image for exactly this reason, so this is belt and braces; the
+    difference is that this one writes the flag, so what staff see in the admin
+    matches what the site renders.
+    """
+    from .models import EventImage
+
+    scope = (
+        Q(event_day_id=event_day.pk) if event_day
+        else Q(event_id=event.pk, event_day__isnull=True)
+    )
+    gallery = EventImage.objects.filter(scope)
+    if gallery.filter(is_primary=True).exists():
+        return
+    first = gallery.order_by("sort_order", "created_at").first()
+    if first:
+        first.is_primary = True
+        first.save(update_fields=["is_primary", "updated_at"])

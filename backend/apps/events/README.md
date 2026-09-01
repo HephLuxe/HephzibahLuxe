@@ -9,12 +9,14 @@ The `events` app manages client event contexts and sub-events (Event Days). It f
 ### `Event`
 The primary event workspace.
 * **celebrant**: ForeignKey to `User` (the client who owns the event).
-* **title**: CharField representation.
+* **title**: CharField representation. **Derived**, never client-supplied — see `generate_event_title`.
+* **headline**: Editorial headline for the public page. Free text, written by staff.
+* **description**: Long-form narrative for the public page — the paragraphs under `headline`.
 * **slug**: Unique SlugField auto-generated from `title`.
 * **event_date**: DateField.
 * **event_venue**: CharField.
 * **event_type**: CharField containing `Birthday`, `Wedding`, `Corporate`, `Social Events`, or `Others`.
-* **featured_image**: Main landing cover.
+* **images**: Reverse relation to `EventImage` — the event's gallery. The cover is the `is_primary` row, read as `cover_image`. (There is no `featured_image` field; see *Galleries* below.)
 * **groom_name** / **bride_name**: Specific fields used if type is `Wedding`.
 * **honoree_name**: Specific field used if type is `Birthday`.
 * **event_name**: General string placeholder.
@@ -22,11 +24,157 @@ The primary event workspace.
 ### `EventDay`
 A scheduled sub-day or event milestone within the main Event.
 * **owner**: ForeignKey to `Event`. Cascades on deletion.
-* **event_day_title**: CharField title for the sub-day (e.g. "Traditional Wedding", "Reception").
+* **event_day_title**: Short label / eyebrow for the sub-day (e.g. "Traditional Wedding", "Pre-Birthday Photoshoot", "Event No. 1").
+* **headline**: Editorial headline for this day.
+* **content**: Long-form narrative for this day — the paragraphs under `headline`.
 * **date**: DateField of the day.
 * **start_time** / **end_time**: Time bounds.
 * **venue** / **venue_address**: Location details.
+* **venue_booking_status**: `VenueBookingStatus` enum — `not_booked` / `pending` / `confirmed`.
+* **dress_code**: CharField (e.g. "Aso-Ebi — Deep Blue & Gold").
 * **estimated_guest_count**: Positive integer target.
+
+### `EventImage`
+One photograph in a gallery. Serves both levels, told apart by `event_day`.
+* **event**: ForeignKey to `Event`. **Always set**, even for a day image — it is what the storage path and the permission check read.
+* **event_day**: ForeignKey to `EventDay`, nullable. NULL = an event-level image; set = one photograph in that day's gallery.
+* **image**: The file. `max_length=500`, public storage, saved exactly as uploaded — nothing is resized or re-encoded.
+* **alt_text**: Screen-reader description.
+* **is_primary**: This gallery's cover. At most one per event and one per event day, enforced by two partial unique constraints.
+* **sort_order**: Ascending display order; ties break on `created_at` so the order is total.
+
+---
+
+## Public-page copy: three fields, not two
+
+Each event day renders three separate pieces of text, so it carries three text
+fields whose boundaries are worth stating explicitly, because two of the three
+used to be one undefined `content` column:
+
+| Field | Renders as | Example |
+|---|---|---|
+| `event_day_title` | eyebrow above the headline | `PRE-BIRTHDAY PHOTOSHOOT`, `EVENT NO. 1` |
+| `headline` | the headline | *A Moment Before Fifty — A Pre-Birthday Portrait Experience* |
+| `content` | narrative paragraphs | *Before the celebrations began, there was a quiet moment to pause…* |
+
+`Event` mirrors the same split one level up: `headline` + `description`. It has no
+equivalent of the eyebrow — that line is composed from `country` / `state` /
+`event_date` (`LAGOS, NIGERIA — 2021`).
+
+**`event_day_title` deliberately stayed the short label** rather than being
+promoted to the headline. Three other places interpolate it inline as a name —
+the client notification (`views.py`), the contact-copy confirmation
+(`contacts/views.py`) and the admin label (`contacts/admin.py`, `Day 1 —
+Traditional Wedding`) — and an 80-character editorial headline reads badly in all
+three.
+
+**The `EVENT NO. n` numbering is typed, not computed.** Staff write the eyebrow as
+it should appear. This looks like something `day_number` should derive, and it
+isn't: `day_number` counts *every* day in date order, but a pre-birthday
+photoshoot sorts first by date while sitting *outside* the numbered sequence — so
+derived numbering renders the first celebration day as "No. 2". Making that work
+would need a per-day "is this part of the sequence" flag; until staff are
+observed getting the numbers wrong, the flag is not worth its weight. `day_number`
+remains internal-only (it is not serialized).
+
+**Existing short `content` values are fine.** Rows written before `content` had a
+defined meaning hold one-liners like *"Traditional engagement ceremony with both
+families."*. Those stay valid and simply render as a very short story — there is no
+separate summary/teaser field, and no backfill was needed.
+
+---
+
+## Galleries: one model, two levels
+
+`Event.featured_image` and `EventDay.event_images` are **gone**. Each held exactly
+one image, which meant staff had one attempt at a cover and no way to keep
+alternates, and a day's photographs had nowhere to live at all. Both are replaced
+by `EventImage` rows:
+
+| Level | `event_day` | Holds | Cover |
+|---|---|---|---|
+| Event | NULL | every image staff uploaded for the event | the `is_primary` row — the single tile the portfolio index renders |
+| Event day | set | that day's full gallery, all of it rendered on the day's page | the `is_primary` row — the cover on the day's card |
+
+Read the cover through **`cover_image`** on either serializer; it is the direct
+replacement for the retired fields and saves a caller that only wants the cover
+from fetching the whole gallery. `images` carries the gallery itself. The event's
+`images` excludes day-level rows deliberately — otherwise every day photograph
+would appear twice in one detail response.
+
+**One model, not `EventImage` + `EventDayImage`.** The upload path needs the event
+either way (paths are keyed `{event_id}-{slug}`), so a separate day model would
+carry a redundant FK up to the event or re-walk `owner` on every path build. One
+model also means one serializer, one route family and one blob-cleanup receiver.
+The cost is that "belongs to this event" and "belongs to a day of this event" must
+agree, which `EventImage.clean()` enforces.
+
+### `is_primary` is a two-row operation
+
+The partial unique constraints refuse a second primary outright, which is the
+right floor but means a naive `image.is_primary = True; image.save()` raises
+IntegrityError — the new primary is set before the old one is cleared, and the
+constraint is checked in between. Everything that writes the flag goes through
+`services.set_primary_image`, which clears then sets inside one transaction and
+excludes the image being promoted so re-promoting the current cover is a no-op
+rather than leaving the gallery coverless.
+
+`services.ensure_gallery_has_a_cover` runs after every upload and delete, so the
+first image uploaded becomes the cover automatically and deleting the cover
+promotes the next one. Without it, "no images" and "images, but the primary was
+deleted" look the same to the frontend and the second renders an empty tile.
+
+### Endpoints
+
+One route family for both levels — omit `event_day` for the event's own images,
+pass it (query param on `GET`, body on writes) for a day's:
+
+| Route | Method | Does |
+|---|---|---|
+| `/event/<slug>/images/` | `GET` | list a gallery — unpaginated, since the frontend needs all of it to lay out the grid |
+| `/event/<slug>/images/` | `POST` | upload one or many (multipart, repeat the `image` key) |
+| `/event/<slug>/images/<id>/` | `PATCH` | `alt_text`, `sort_order`, or `is_primary: true` to promote |
+| `/event/<slug>/images/<id>/` | `DELETE` | remove the row and its blob |
+| `/event/<slug>/images/reorder/` | `POST` | `{"image_ids": [...]}` — set the whole order at once |
+
+Reorder is one call rather than N `PATCH`es because a drag-and-drop changes every
+position simultaneously: sent one at a time the gallery passes through orders
+nobody asked for, and a failure halfway leaves it scrambled with no way to tell
+which half applied. The list must name every image in the gallery exactly once —
+a partial list is a 400.
+
+Writes are gated by `event_details_locked` exactly like editing the event itself;
+a locked event whose photographs are still replaceable isn't locked. Unlike
+`delete_eventday`, a client **may** delete their own images when unlocked — a
+photograph is content they supplied, and the day it hangs off survives.
+
+### Storage paths and cleanup
+
+Gallery paths embed the image's own id and keep the uploaded filename:
+
+```
+portals/{portal}/events/{event_id}-{slug}/gallery/{image_id}/{filename}
+portals/{portal}/events/{event_id}-{slug}/days/{day_id}/gallery/{image_id}/{filename}
+```
+
+The retired fields resolved to a *constant* name (`covers/cover.jpg`). Fine for
+one file; for N rows every path would collide and the storage backend would
+quietly append a random suffix to each, leaving blobs with no stable mapping back
+to a row. The id segment fixes that, and matches how `prep_upload_path` and the
+document hub already handle multi-row files.
+
+`apps/events/signals.py` deletes the blob on `post_delete`, deferred to
+`transaction.on_commit` because storage is not transactional. **Neither retired
+field had this** — deleting an event left its cover in the bucket for ever.
+Registering the receiver also forces Django off its fast-delete optimisation, so
+it fires on cascades (`Event.delete()` → both galleries, `EventDay.delete()` →
+that day's) which never pass through view code.
+
+Migration `0012_migrate_single_images_to_gallery` carries any existing
+`featured_image` / `event_images` value across as the primary before dropping the
+columns, and is reversible. It moves no blobs — it repoints the new row at the
+path the file already occupies, so those carried-over rows keep the old layout
+for ever, which is harmless.
 
 ---
 
@@ -38,6 +186,16 @@ A scheduled sub-day or event milestone within the main Event.
   Handles sub-day schedules. Exposes `venue_booking_status_display` (the field is
   a `VenueBookingStatus` enum: `confirmed` / `pending` / `not_booked`) and
   `last_updated_by_display`.
+* **`EventImageSerializer`**:
+  One gallery image. `event` / `event_day` are read-only — the scope comes from
+  the URL and the request body, resolved and membership-checked in the view, so
+  a caller can't attach an image to an event they can't reach by putting an id in
+  the body.
+* Both `EventSerializer` and `EventDaySerializer` mix in `_GalleryMixin` for
+  `images` + `cover_image`. Both read `obj.images.all()` rather than `.filter()`
+  so a `prefetch_related("images")` is actually used — the difference between one
+  query and one per row on a list endpoint. The querysets in `views.py` and
+  `build_event_detail` prefetch accordingly.
 
 ### Attribution ("Last Updated by …")
 `Event` and `EventDay` carry a `last_updated_by` FK, set from `request.user` in
@@ -136,8 +294,8 @@ scoped to). Response shape:
 
 ```jsonc
 {
-  "event": { /* EventSerializer */ },
-  "event_days": [ /* EventDaySerializer */ ],
+  "event": { /* EventSerializer — incl. images[] + cover_image */ },
+  "event_days": [ /* EventDaySerializer — each incl. images[] + cover_image */ ],
   "contacts": { "primary": { "label": "...", "contacts": [...] }, /* ... */ },
   "contacts_summary": [ { "category": "primary", "category_display": "...", "count": 2 }, /* ... */ ],
   "planning_stage": {
@@ -177,4 +335,6 @@ scoped to). Response shape:
   deliberately two flags, not one.
 - **Deleting an event cascades widely.** Check `GET /event/<slug>/delete-impact/`
   first; `DELETE` refuses with `confirmation_required` unless `?confirm=true`
-  when anything is attached.
+  when anything is attached. The preview counts `event_images` — one figure for
+  both galleries, since every `EventImage` cascades from `event` whether or not
+  it also names a day.

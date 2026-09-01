@@ -404,6 +404,54 @@ SIMPLE_JWT = {
 
 AUTH_USER_MODEL = "accounts.User"
 
+# ── The developer accounts (apps/accounts/developers.py) ──────────────────────
+# Comma-separated emails that hold the `developer` role — the one role above
+# admin, and the only one an admin cannot revoke.
+#
+# It lives HERE, in deployment config, rather than only in the `role` column,
+# and that placement is the entire control. Everything else on this platform is
+# administered by `role=admin` accounts, which are `is_superuser=True` and can
+# therefore rewrite any row in the Django admin — including the row that says
+# who is a developer. Anchoring the answer in the environment moves it out of
+# reach of every surface an admin can touch: to remove a developer you need the
+# Render dashboard (or the server's .env), not a platform login.
+#
+# The `role` column still exists and still says "developer"; it is a MIRROR of
+# this list, kept in step by User.save() and `manage.py ensure_developer`, so
+# the admin UI and ?role= filters have something to display and query. It is
+# never the thing consulted for a permission decision — see
+# developers.is_developer_email, which reads only this setting. A row edited to
+# disagree loses the argument and is repaired at next sign-in.
+#
+# Empty is valid and is the right value for a deploy with no developer account
+# (CI, a reviewer's checkout). It means "nobody is protected", not "everybody".
+#
+# Normalised to lowercase once, at boot, because it is compared against
+# User.email — which is stored as typed. Comparing raw would make
+# `Ade@Example.com` in the env silently fail to match `ade@example.com` in the
+# database, and the failure mode is losing your own protection without any
+# error to notice.
+PLATFORM_DEVELOPER_EMAILS = [
+    email.strip().lower()
+    for email in env.list('PLATFORM_DEVELOPER_EMAILS', default=[])
+    if email.strip()
+]
+
+# Validated at boot for the same reason PLATFORM_DEFAULT_TIMEZONE is: a typo
+# here does not raise anywhere later, it just quietly protects nobody. The one
+# person who would notice is the one who has already been locked out.
+for _dev_email in PLATFORM_DEVELOPER_EMAILS:
+    if '@' not in _dev_email or _dev_email.startswith('@') or _dev_email.endswith('@'):
+        raise ImproperlyConfigured(
+            f"PLATFORM_DEVELOPER_EMAILS contains {_dev_email!r}, which is not an "
+            "email address. Expected a comma-separated list, e.g. "
+            "PLATFORM_DEVELOPER_EMAILS=you@example.com,cofounder@example.com. An "
+            "unparsed entry protects nobody, and silently."
+        )
+# Scoped-loop leakage: `for` does not create a scope, so without this the last
+# entry stays in the settings module as a public-looking name.
+_dev_email = None
+
 # NOTE: email used to send via Django's SMTP backend here
 # (EMAIL_BACKEND/HOST/PORT/USE_TLS/HOST_USER/HOST_PASSWORD, plus
 # DEFAULT_FROM_EMAIL). All outbound mail now goes through Brevo's
