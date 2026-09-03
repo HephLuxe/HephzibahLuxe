@@ -100,9 +100,10 @@ aspirational.
 `login_tier_exhausted`, `reset_code_rejected`, `inquiry_dedupe_hit`,
 `event_details_dispatched`, `notifications_purged`, `reset_tokens_pruned`,
 `brevo_recovered`, `brevo_send_deferred`, `health_dependency_down`,
-`recaptcha_rejected`, `recaptcha_low_score`, `recaptcha_action_mismatch`.
+`recaptcha_rejected`, `recaptcha_low_score`, `recaptcha_action_mismatch`,
+`private_file_read_refused`.
 
-Three are worth a **dashboard panel** even though they are not alerts:
+Four are worth a **dashboard panel** even though they are not alerts:
 
 - `rate_limited` broken down by `path` — the only way to tell whether a limit is
   mis-tuned before someone complains. Its `retry_after` field separates "clicking
@@ -113,6 +114,22 @@ Three are worth a **dashboard panel** even though they are not alerts:
   field, the only way to see whether the threshold is mis-tuned. `0.5` in
   settings is Google's placeholder, not a measurement; if this climbs, the bar
   is quietly eating real inquiries and nobody will ever report it.
+- `private_file_read_refused` (INFO, `core/file_views.py`) — a client asked
+  `GET /files/<type>/<id>/` for a file on a portal that is not theirs, and was
+  refused. Carries `file_type`, `object_id` and `user_id`.
+
+  **Not an alert, and the reason is specific:** a handful of these is the
+  expected shape of an ordinary bug — a frontend rendering a stale id after a
+  document was deleted, or a staff member's session pointed at a portal they
+  have since switched away from. Paging on that would train you to ignore it.
+
+  What it is for is the *shape* of the curve. This endpoint mints credentials,
+  so a sustained climb from one `user_id` across many `object_id`s is somebody
+  walking ids with a valid token, and this log line is the only place that is
+  visible — the caller sees a 404 identical to a genuine miss, by design, so
+  nothing else distinguishes it. Worth a panel grouped by `user_id`, and worth a
+  rule if the platform ever gets enough traffic for a baseline to mean
+  something.
 
 `health_dependency_down` (ERROR, `core/views.py`) records that
 `/health/ready/` could not reach Postgres or Redis, carrying `dependency`

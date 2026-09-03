@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from apps.core.admin import ATTRIBUTION_FIELDS, ATTRIBUTION_FIELDSET, AttributionAdminMixin
+from apps.core.admin_files import PrivateFileAdminMixin
 
 from .models import BudgetCategory, BudgetPayment, EventBudget, PaymentStatus
 
@@ -50,9 +51,10 @@ class BudgetCategoryAdmin(AttributionAdminMixin, admin.ModelAdmin):
 
 
 @admin.register(BudgetPayment)
-class BudgetPaymentAdmin(AttributionAdminMixin, admin.ModelAdmin):
-    readonly_fields = [*ATTRIBUTION_FIELDS]
-    list_display = ["vendor_item", "budget", "category", "purpose", "amount", "status", "payment_date", "created_by_display", "last_updated_by_display"]
+class BudgetPaymentAdmin(PrivateFileAdminMixin, AttributionAdminMixin, admin.ModelAdmin):
+    private_file_type = "budget-receipt"
+    readonly_fields = ["file_link", *ATTRIBUTION_FIELDS]
+    list_display = ["vendor_item", "budget", "category", "purpose", "amount", "status", "payment_date", "file_link", "created_by_display", "last_updated_by_display"]
     list_filter = ["status", "category"]
     search_fields = ["vendor_item", "purpose", "budget__event__title"]
     raw_id_fields = ["budget"]

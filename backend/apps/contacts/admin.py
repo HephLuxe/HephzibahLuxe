@@ -1,13 +1,14 @@
 from django.contrib import admin
-from django.utils.html import format_html
 
 from apps.core.admin import ATTRIBUTION_FIELDS, ATTRIBUTION_FIELDSET, AttributionAdminMixin
+from apps.core.admin_files import PrivateFileAdminMixin
 
 from .models import EventContact
 
 
 @admin.register(EventContact)
-class EventContactAdmin(AttributionAdminMixin, admin.ModelAdmin):
+class EventContactAdmin(PrivateFileAdminMixin, AttributionAdminMixin, admin.ModelAdmin):
+    private_file_type = "contact-photo"
     list_display = [
         "name", "role", "category", "event", "event_day_display", "preferred_method",
         "photo_preview", "created_at", "created_by_display", "updated_at", "last_updated_by_display",
@@ -29,11 +30,13 @@ class EventContactAdmin(AttributionAdminMixin, admin.ModelAdmin):
             return f"Day {day_number}"
         return title or "-"
 
+    # photo_preview comes from PrivateFileAdminMixin.file_preview: contact photos
+    # moved to the private tier, so a raw obj.photo.url would embed a signature
+    # that expires while the page sits open. The mixin renders the
+    # /admin-files/ redirect instead, which signs at fetch time.
     @admin.display(description="Photo")
     def photo_preview(self, obj):
-        if obj.photo:
-            return format_html('<img src="{}" style="max-height: 60px;" />', obj.photo.url)
-        return "-"
+        return self.file_preview(obj)
 
     fieldsets = (
         (None, {

@@ -7,7 +7,7 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from apps.core.serializers import AttributionSerializerMixin
+from apps.core.serializers import AttributionSerializerMixin, PrivateFileURLField
 from apps.core.uploads import validate_document
 
 from .models import (
@@ -23,18 +23,26 @@ from .models import (
 
 class ClientDocumentSerializer(AttributionSerializerMixin, serializers.ModelSerializer):
     category_display = serializers.CharField(source="get_category_display", read_only=True)
+    # `file` is write-only: uploads still target it (and validate_file below
+    # still runs), but reads expose `file_url` — the endpoint that mints a
+    # 60-second signed URL after an ownership check. Serializing the storage URL
+    # directly handed the client a one-hour signature minted at page-render
+    # time, which went stale in an open tab and kept working if forwarded. See
+    # apps/core/filelinks.py.
+    file_url = PrivateFileURLField("client-document")
 
     class Meta:
         model = ClientDocument
         fields = [
             "id", "category", "category_display", "reference_code",
-            "title", "description", "file", "is_signed", "signed_on",
+            "title", "description", "file", "file_url", "is_signed", "signed_on",
             "order", "created_at", "updated_at",
             "created_by_display", "last_updated_by_display",
         ]
         # reference_code is system-generated (see document_hub.services /
         # signals) — read-only, never accepted from the client.
         read_only_fields = ["id", "reference_code", "created_at", "updated_at"]
+        extra_kwargs = {"file": {"write_only": True}}
 
     def validate_file(self, value):
         return validate_document(value)
@@ -114,13 +122,14 @@ class InvoiceSerializer(AttributionSerializerMixin, serializers.ModelSerializer)
         queryset=PaymentMilestone.objects.all(), required=False, allow_null=True,
     )
     milestone_label = serializers.CharField(source="milestone.label", read_only=True, default=None)
+    file_url = PrivateFileURLField("invoice")
 
     class Meta:
         model = Invoice
         fields = [
             "id", "invoice_number", "milestone", "milestone_label",
             "issued_on", "due_on",
-            "amount", "status", "status_display", "file", "created_at",
+            "amount", "status", "status_display", "file", "file_url", "created_at",
             "created_by_display", "last_updated_by_display",
         ]
         # invoice_number is system-generated — read-only.
@@ -129,19 +138,25 @@ class InvoiceSerializer(AttributionSerializerMixin, serializers.ModelSerializer)
         # can raise an invoice for a milestone with no agreed date yet. An API
         # caller writing an invoice by hand has a date in mind, so it stays
         # required here rather than silently landing as null.
-        extra_kwargs = {"due_on": {"required": True, "allow_null": False}}
+        extra_kwargs = {
+            "due_on": {"required": True, "allow_null": False},
+            "file": {"write_only": True},
+        }
 
     def validate_file(self, value):
         return validate_document(value)
 
 
 class ReceiptSerializer(AttributionSerializerMixin, serializers.ModelSerializer):
+    file_url = PrivateFileURLField("receipt")
+
     class Meta:
         model = Receipt
-        fields = ["id", "receipt_number", "paid_on", "payment_for", "amount", "file", "created_at", "created_by_display", "last_updated_by_display",
+        fields = ["id", "receipt_number", "paid_on", "payment_for", "amount", "file", "file_url", "created_at", "created_by_display", "last_updated_by_display",
         ]
         # receipt_number is system-generated — read-only.
         read_only_fields = ["id", "receipt_number", "created_at"]
+        extra_kwargs = {"file": {"write_only": True}}
 
     def validate_file(self, value):
         return validate_document(value)

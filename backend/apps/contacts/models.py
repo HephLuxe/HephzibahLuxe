@@ -3,7 +3,6 @@ import uuid
 from django.db import models
 
 from apps.core.models import AttributedModel
-from apps.core.storages import select_public_media_storage
 from apps.core.utils import contact_photo_upload_path
 
 
@@ -31,7 +30,13 @@ class EventContact(AttributedModel):
     phone = models.CharField(max_length=50, blank=True)
     email = models.EmailField(blank=True)
     preferred_method = models.CharField(max_length=20, choices=PreferredMethod.choices, blank=True)
-    photo = models.ImageField(upload_to=contact_photo_upload_path, storage=select_public_media_storage, blank=True, max_length=500)
+    # No `storage=` argument, so this takes the DEFAULT (private, signed) tier.
+    # It used to be on the public bucket, which made every contact photo a
+    # permanent, unauthenticated URL — and contacts are the client's family,
+    # bridal party and vendors, not portfolio subjects. Read it through
+    # `GET /files/contact-photo/<id>/`, which checks portal ownership and mints
+    # a 60-second URL (apps/core/filelinks.py).
+    photo = models.ImageField(upload_to=contact_photo_upload_path, blank=True, max_length=500)
     # created_by / last_updated_by come from AttributedModel (apps/core/models.py).
     # FKs, not name strings (see docs/FAILURE_POINTS_AUDIT.md F11) — a frozen
     # text snapshot goes stale on rename, can't disambiguate two staff with

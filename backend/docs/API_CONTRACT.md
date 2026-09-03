@@ -42,11 +42,30 @@
   `PATCH /users/<email>/status/` against one returns **403**. It appears in
   `GET /users/` and is filterable with `?role=developer` like any other. See
   `docs/adr/0004-protected-developer-role.md`.
-- **One carve-out from the two rules above:** `POST /api/v1/inquiries/` (public
+- **Private files are never handed out as storage URLs.** Every file on the
+  signed storage tier (client documents, invoices, receipts, budget receipts,
+  meeting prep uploads, contact photos) reads as a `*_url` field holding
+  `/api/v1/files/<type>/<id>/`. `GET` that with a token and it re-checks
+  ownership and returns `{"url": ..., "expires_in": 60}`. The path itself never
+  expires, so it is safe to cache; the URL it mints lives 60 seconds. Writes are
+  unchanged — uploads still `POST` the raw `file`/`photo` field, which is now
+  write-only. Public display images (event galleries, team photos) are NOT
+  affected: they serve permanent unsigned URLs from a custom domain. See
+  `apps/core/filelinks.py`.
+  Staff have a parallel route at `/admin-files/<type>/<id>/` — **outside**
+  `/api/v1/`, on session auth, 302-ing to a freshly signed URL. It exists
+  because DRF is JWT-only, so an admin's session cookie is anonymous to the API
+  endpoint, and because a changelist needs a clickable download rather than
+  JSON. It is not part of this contract; it backs the admin's download links and
+  image previews (`apps/core/admin_files.py`).
+- **Two carve-outs from the auth rule above:** `POST /api/v1/inquiries/` (public
   lead capture) takes no token and applies no role scoping. The auth endpoints
   (`auth/token/*`, `auth/password-reset/*`) are necessarily unauthenticated
   too, but they act on an account that already exists; the inquiry endpoint is
-  the only place an anonymous caller **creates a record**. Everything else on
+  the only place an anonymous caller **creates a record**. The second is
+  `GET /api/v1/portfolio/events/[<slug>/]` (the public portfolio), which is
+  read-only, returns only events flagged `is_published`, and uses allowlist
+  serializers rather than the portal ones — see `apps/events/README.md`. Everything else on
   this page still applies to it — same `/api/v1/` prefix, same error envelope,
   same codes — and it is rate-limited on two tiers (`(IP, email)` for a
   fumbling human, IP alone for a script varying the email) and optionally

@@ -5,6 +5,7 @@ from django.conf import settings
 from django.db import models
 
 from apps.core.models import AttributedModel
+from apps.core.storages import select_public_media_storage
 
 
 # Create your models here.
@@ -54,7 +55,17 @@ class TeamMember(AttributedModel):
     name = models.CharField(max_length=255)
     role = models.CharField(max_length=255)          # "Client Experience Lead"
     bio = models.TextField(blank=True)
-    photo = models.ImageField(upload_to=team_photo_upload_path, blank=True)
+    # PUBLIC tier, like the event galleries. These are the agency's own staff
+    # shown inline in every portal — the same handful of photos for every
+    # client, with nothing to protect. On the default (signed) tier they were
+    # paying the whole cost of privacy for none of the benefit: the signature
+    # changes on every serialization, so the URL changes, so the browser cache
+    # never hits and each photo re-downloaded on every page load. max_length=500
+    # matches the other image fields (see EventImage.image).
+    photo = models.ImageField(
+        upload_to=team_photo_upload_path, storage=select_public_media_storage,
+        blank=True, max_length=500,
+    )
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=50, blank=True)
     # Members flagged here are auto-assigned to every NEW client portal (the

@@ -5,7 +5,7 @@ from decimal import Decimal
 from django.core.files.uploadedfile import UploadedFile
 from rest_framework import serializers
 
-from apps.core.serializers import AttributionSerializerMixin
+from apps.core.serializers import AttributionSerializerMixin, PrivateFileURLField
 from apps.core.uploads import MAX_PHOTO_SIZE, validate_upload
 
 from .models import BudgetCategory, BudgetHealthStatus, BudgetPayment, EventBudget
@@ -40,6 +40,8 @@ class BudgetCategorySerializer(AttributionSerializerMixin, serializers.ModelSeri
 class BudgetPaymentSerializer(AttributionSerializerMixin, serializers.ModelSerializer):
     category_display = serializers.CharField(source="get_category_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    # Write to `receipt`, read from `receipt_url` — see ClientDocumentSerializer.
+    receipt_url = PrivateFileURLField("budget-receipt")
 
     class Meta:
         model = BudgetPayment
@@ -48,10 +50,11 @@ class BudgetPaymentSerializer(AttributionSerializerMixin, serializers.ModelSeria
             "category", "category_display",
             "purpose", "amount",
             "status", "status_display",
-            "receipt", "created_at",
+            "receipt", "receipt_url", "created_at",
             "created_by_display", "last_updated_by_display",
         ]
         read_only_fields = ["id", "created_at"]
+        extra_kwargs = {"receipt": {"write_only": True}}
 
     def validate_receipt(self, value: UploadedFile | None) -> UploadedFile | None:
         # A receipt is a photo of a slip or a one-page PDF, so it is held to the

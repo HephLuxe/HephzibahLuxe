@@ -2,6 +2,7 @@ from django.contrib import admin
 from rest_framework.exceptions import ValidationError
 
 from apps.core.admin import ATTRIBUTION_FIELDS, AttributionAdminMixin
+from apps.core.admin_files import PrivateFileAdminMixin
 
 from . import services
 from .models import (
@@ -15,10 +16,13 @@ from .models import (
 )
 
 
-class PrepItemFileUploadInline(admin.TabularInline):
+class PrepItemFileUploadInline(PrivateFileAdminMixin, admin.TabularInline):
+    # Prep uploads are on the private tier, so the download goes through
+    # /admin-files/ rather than the raw signed file.url.
+    private_file_type = "prep-upload"
     model = PrepItemFileUpload
     extra = 0
-    readonly_fields = ["uploaded_at"]
+    readonly_fields = ["uploaded_at", "file_link"]
 
 
 class PrepItemFieldInline(admin.TabularInline):

@@ -4,20 +4,39 @@ apps/core/storages.py
 Media storage policy — two tiers, so display images and sensitive documents
 don't share one URL scheme:
 
-  * **Documents** (Service Agreements, quotations, invoices, receipts, budget
-    receipts, meeting prep uploads) stay on the *default* storage, which — when
-    R2 is on — signs every URL with a short expiry (``AWS_QUERYSTRING_AUTH=True``
-    / ``AWS_QUERYSTRING_EXPIRE``, see config/settings.py). A leaked or shared
-    link stops working once it expires. Nothing here changes that.
+The split is by **whether the URL itself should be a credential**, not by file
+type. An object key is not a secret: once a bucket is public the URL *is* the
+entire access control, and R2 exposes public access per BUCKET — you cannot make
+one object public inside a private bucket. Hence two buckets.
 
-  * **Display images** (``EventImage.image`` — the event and event-day galleries —
-    and ``EventContact.photo``) are shown inline by the frontend and are routinely
-    cached in an already-fetched event JSON payload. A 1-hour signed URL would
-    turn into a broken image an hour after the page was loaded. So these are
-    served from a dedicated **public** bucket / custom domain with **unsigned,
-    long-lived** URLs via ``PublicMediaStorage`` below.
+  * **Access-controlled** (Service Agreements, quotations, invoices, receipts,
+    budget receipts, meeting prep uploads, ``EventContact.photo``) stay on the
+    *default* storage, which — when R2 is on — signs every URL with an expiry
+    (``AWS_QUERYSTRING_AUTH=True`` / ``AWS_QUERYSTRING_EXPIRE``). These are never
+    handed to a client as a raw storage URL; they are minted on demand by
+    ``GET /files/<type>/<id>/`` after an ownership check, with a 60-second expiry
+    (see apps/core/filelinks.py). Expiry is what makes a forwarded link stop
+    working and what makes revocation take effect.
 
-Wiring: those image fields use ``storage=select_public_media_storage``.
+  * **World-readable** (``EventImage.image`` — the event and event-day galleries —
+    and ``TeamMember.photo``) are served from a dedicated **public** bucket on a
+    custom domain with **unsigned, permanent** URLs via ``PublicMediaStorage``.
+    Signing these is actively harmful: the URLs are cached in already-fetched
+    JSON, in the CDN, in the browser and in a static site build, so a signature
+    turns every one of those copies into a broken image when it expires. There is
+    also nothing to protect — the galleries exist to be on a public website.
+
+Why ``EventContact.photo`` moved to the private tier: contacts are the client's
+family, bridal party and vendors, so their photographs are not portfolio
+subjects, and they only ever render inside an authenticated portal.
+
+Why ``TeamMember.photo`` moved to the public tier: it is the agency's own staff,
+the same handful of photos shown to every client. On the signed tier it paid the
+full cost of privacy for none of the benefit — the signature changes on every
+serialization, so the URL changes, so the browser cache never hits.
+
+Wiring: the world-readable fields use ``storage=select_public_media_storage``;
+everything else simply omits ``storage=`` and inherits the default.
 Because that's a *callable*, Django records only the reference in migrations and
 resolves the actual backend at boot from the current settings — so flipping
 ``USE_R2_STORAGE`` (or configuring a public bucket later) needs no new migration.

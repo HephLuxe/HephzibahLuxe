@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import public_views, views
 
 urlpatterns = [
     path('event/create/', views.create_event, name ='create_event'), # POST — Permission check: Only the superuser, or staff can
@@ -27,4 +27,11 @@ urlpatterns = [
     path('event/<slug:event_slug>/images/', views.event_gallery, name='event_gallery'),  # GET|POST
     path('event/<slug:event_slug>/images/reorder/', views.reorder_event_gallery, name='reorder_event_gallery'),  # POST
     path('event/<slug:event_slug>/images/<uuid:image_id>/', views.event_gallery_image, name='event_gallery_image'),  # PATCH|DELETE
+
+    # ── Public portfolio: the only UNAUTHENTICATED reads on the platform ──
+    # Separate paths rather than a ?public= flag on the routes above, so an
+    # anonymous surface can never be reached by accident and is obvious in
+    # review. Both filter on Event.is_published. See public_views.py.
+    path('portfolio/events/', public_views.portfolio_events, name='portfolio_events'),  # GET (public)
+    path('portfolio/events/<slug:slug>/', public_views.portfolio_event_detail, name='portfolio_event_detail'),  # GET (public)
 ]

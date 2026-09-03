@@ -10,11 +10,13 @@ Canonical, human-readable route list: docs/API_CONTRACT.md.
 from django.contrib import admin
 from django.urls import include, path
 
+from apps.core.admin_files import admin_private_file
 from apps.core.admin_login import guarded_admin_login
 from apps.core.views import health_live, health_ready
 
 # Every app is prefix-free internally; the version prefix is applied here once.
 api_v1_patterns = [
+    path('', include('apps.core.urls')),
     path('', include('apps.accounts.urls')),
     path('', include('apps.events.urls')),
     path('', include('apps.portal.urls')),
@@ -45,6 +47,12 @@ urlpatterns = [
     # the home-server control-panel wizard hit stable, unauthenticated paths.
     path('health/', health_live),
     path('health/ready/', health_ready),
+    # Staff download links for the private storage tier. Deliberately OUTSIDE
+    # the /api/v1/ prefix: this is admin plumbing on session auth, not part of
+    # the API contract, and DRF's JWT-only authentication would reject an
+    # admin's session cookie anyway. See apps/core/admin_files.py.
+    path('admin-files/<str:file_type>/<str:obj_id>/', admin_private_file, name='admin_private_file'),
+
     path('api/v1/', include(api_v1_patterns)),
 ]
 

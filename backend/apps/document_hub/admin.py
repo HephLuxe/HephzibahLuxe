@@ -4,6 +4,7 @@ from django import forms
 from django.contrib import admin
 
 from apps.core.admin import ATTRIBUTION_FIELDS, AttributionAdminMixin
+from apps.core.admin_files import PrivateFileAdminMixin
 
 from . import services
 from .models import (
@@ -44,13 +45,17 @@ class ReferenceCounterAdmin(admin.ModelAdmin):
 
 
 @admin.register(ClientDocument)
-class ClientDocumentAdmin(AttributionAdminMixin, admin.ModelAdmin):
-    list_display = ("title", "category", "reference_code", "is_signed", "signed_on", "engagement", "created_by_display", "last_updated_by_display")
+class ClientDocumentAdmin(PrivateFileAdminMixin, AttributionAdminMixin, admin.ModelAdmin):
+    # `file_link` goes through /admin-files/, which signs at click time — the raw
+    # `file.url` would embed a signature that is dead before anyone reads the
+    # page. See apps/core/admin_files.py.
+    private_file_type = "client-document"
+    list_display = ("title", "category", "reference_code", "file_link", "is_signed", "signed_on", "engagement", "created_by_display", "last_updated_by_display")
     list_filter = ("category", "is_signed")
     search_fields = ("title", "reference_code")
     raw_id_fields = ("engagement",)
     # reference_code is system-generated (pre_save signal) — never typed.
-    readonly_fields = ("reference_code", *ATTRIBUTION_FIELDS)
+    readonly_fields = ("reference_code", "file_link", *ATTRIBUTION_FIELDS)
     actions = ["mark_as_signed"]
 
     @admin.action(description="Mark selected documents as signed today")
@@ -176,13 +181,14 @@ class PaymentMilestoneAdmin(admin.ModelAdmin):
 
 
 @admin.register(Invoice)
-class InvoiceAdmin(AttributionAdminMixin, admin.ModelAdmin):
-    list_display = ("invoice_number", "engagement", "milestone", "issued_on", "due_on", "amount", "status", "created_by_display", "last_updated_by_display")
+class InvoiceAdmin(PrivateFileAdminMixin, AttributionAdminMixin, admin.ModelAdmin):
+    private_file_type = "invoice"
+    list_display = ("invoice_number", "engagement", "milestone", "issued_on", "due_on", "amount", "status", "file_link", "created_by_display", "last_updated_by_display")
     list_filter = ("status",)
     search_fields = ("invoice_number",)
     raw_id_fields = ("engagement", "milestone")
     # invoice_number is system-generated (pre_save signal) — filled on save.
-    readonly_fields = ("invoice_number", *ATTRIBUTION_FIELDS)
+    readonly_fields = ("invoice_number", "file_link", *ATTRIBUTION_FIELDS)
     actions = ["mark_as_paid"]
 
     def save_model(self, request, obj, form, change):
@@ -219,9 +225,10 @@ class InvoiceAdmin(AttributionAdminMixin, admin.ModelAdmin):
 
 
 @admin.register(Receipt)
-class ReceiptAdmin(AttributionAdminMixin, admin.ModelAdmin):
-    list_display = ("receipt_number", "engagement", "paid_on", "payment_for", "amount", "created_by_display", "last_updated_by_display")
+class ReceiptAdmin(PrivateFileAdminMixin, AttributionAdminMixin, admin.ModelAdmin):
+    private_file_type = "receipt"
+    list_display = ("receipt_number", "engagement", "paid_on", "payment_for", "amount", "file_link", "created_by_display", "last_updated_by_display")
     search_fields = ("receipt_number", "payment_for")
     raw_id_fields = ("engagement",)
     # receipt_number is system-generated (pre_save signal) — filled on save.
-    readonly_fields = ("receipt_number", *ATTRIBUTION_FIELDS)
+    readonly_fields = ("receipt_number", "file_link", *ATTRIBUTION_FIELDS)

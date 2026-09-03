@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.core.serializers import AttributionSerializerMixin
+from apps.core.serializers import AttributionSerializerMixin, PrivateFileURLField
 from apps.core.uploads import validate_photo
 
 from .models import EventContact
@@ -12,6 +12,11 @@ from .models import EventContact
 
 class EventContactSerializer(AttributionSerializerMixin, serializers.ModelSerializer):
     """Full detail — used for create and single-contact reads."""
+    # Contact photos moved to the private storage tier, so reads expose the
+    # mint path under `photo_url` and the raw `photo` field is no longer
+    # serialized at all. Uploads still target `photo`, on
+    # EventContactCreateSerializer below.
+    photo_url = PrivateFileURLField("contact-photo")
     category_display = serializers.CharField(
         source="get_category_display", read_only=True
     )
@@ -25,18 +30,16 @@ class EventContactSerializer(AttributionSerializerMixin, serializers.ModelSerial
             "id", "event", "event_day", "category", "category_display",
             "name", "role", "phone", "email",
             "preferred_method", "preferred_method_display",
-            "photo",
+            "photo_url",
             "created_at", "created_by_display",
             "updated_at", "last_updated_by_display",
         ]
         read_only_fields = ["id", "event", "created_at", "updated_at"]
 
-    def validate_photo(self, value):
-        return validate_photo(value)
-
 
 class EventContactListSerializer(AttributionSerializerMixin, serializers.ModelSerializer):
     """Minimal — used when listing contacts grouped by category."""
+    photo_url = PrivateFileURLField("contact-photo")
     category_display = serializers.CharField(
         source="get_category_display", read_only=True
     )
@@ -50,7 +53,7 @@ class EventContactListSerializer(AttributionSerializerMixin, serializers.ModelSe
             "id", "event_day", "category", "category_display",
             "name", "role", "phone", "email",
             "preferred_method", "preferred_method_display",
-            "photo", "created_by_display", "last_updated_by_display",
+            "photo_url", "created_by_display", "last_updated_by_display",
         ]
 
 

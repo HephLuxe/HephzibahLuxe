@@ -28,6 +28,7 @@ from unittest import mock
 
 from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.files.storage import InMemoryStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
@@ -39,7 +40,7 @@ from apps.core import background
 from apps.core.error_codes import CONFIRMATION_REQUIRED
 from apps.core.pagination import StandardPageNumberPagination
 from apps.core.utils import event_gallery_upload_path
-from apps.events import services, views
+from apps.events import public_views, services, views
 from apps.events.models import Event, EventDay, EventImage
 from apps.events.serializers import EventDaySerializer, EventSerializer
 from apps.events.services import get_event_deletion_impact, schedule_event_details_notification
@@ -1016,3 +1017,274 @@ class AdminFormsBuildTests(TestCase):
                 with self.subTest(inline=inline_cls.__name__):
                     inline = inline_cls(model_admin.model, admin.site)
                     inline.get_formset(request)
+
+
+@override_settings(USE_R2_STORAGE=False)
+class PublicPortfolioTests(TestCase):
+    """
+    The anonymous portfolio API. Two independent guarantees, tested separately
+    because a private event leaking needs BOTH to fail:
+
+      * the queryset only ever returns is_published=True;
+      * the serializers are allowlists, so a field added to a model later is not
+        published by default.
+
+    The field-level assertions are the ones worth keeping strict. Reusing the
+    portal serializers here would have published the client's email address
+    (`celebrant`), their venue addresses — frequently a family residence — and
+    their guest counts.
+    """
+
+    def setUp(self):
+        self.client_user = User.objects.create_user(
+            first_name="Ada", last_name="Obi", email="portfolioclient@example.com", password="x",
+        )
+        self.published = _make_event(self.client_user, title="Published Wedding")
+        self.published.is_published = True
+        self.published.headline = "A Golden 50th"
+        self.published.description = "Narrative."
+        self.published.save()
+
+        self.private = _make_event(self.client_user, title="Private Wedding")
+
+        self.day = EventDay.objects.create(
+            owner=self.published, event_day_title="Event No. 1",
+            headline="Rooted in Gratitude", content="Story.",
+            date=datetime.date(2027, 6, 1),
+            venue="Grace Family Chapel",
+            venue_address="12 Adeniran Ogunsanya, Surulere, Lagos",
+            dress_code="Aso-Ebi", estimated_guest_count=250,
+        )
+        cache.clear()
+
+    def _list(self):
+        return public_views.portfolio_events(factory.get("/"))
+
+    def _detail(self, slug):
+        return public_views.portfolio_event_detail(factory.get("/"), slug=slug)
+
+    # ── anonymous access ─────────────────────────────────────────────────────
+
+    def test_an_anonymous_caller_can_read_the_portfolio(self):
+        """The whole point: no Authorization header."""
+        resp = self._list()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual([e["slug"] for e in resp.data], [self.published.slug])
+
+    def test_an_unpublished_event_is_absent_from_the_index(self):
+        self.assertNotIn(
+            self.private.slug, [e["slug"] for e in self._list().data],
+        )
+
+    def test_an_unpublished_event_is_a_404_not_a_403(self):
+        """A 403 would confirm the event exists, which is itself a fact about a
+        private client engagement."""
+        resp = self._detail(self.private.slug)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_publishing_is_opt_in(self):
+        self.assertFalse(Event._meta.get_field("is_published").default)
+
+    # ── what must never appear ───────────────────────────────────────────────
+
+    def test_the_index_never_exposes_client_identity(self):
+        tile = self._list().data[0]
+        for leaked in ("celebrant", "title", "groom_name", "bride_name",
+                       "honoree_name", "created_by_display", "id"):
+            self.assertNotIn(leaked, tile, f"{leaked} must not be public")
+
+    def test_the_detail_never_exposes_planning_data(self):
+        day = self._detail(self.published.slug).data["event_days"][0]
+        for leaked in ("venue", "venue_address", "dress_code",
+                       "estimated_guest_count", "venue_booking_status",
+                       "start_time", "end_time", "id", "created_by_display"):
+            self.assertNotIn(leaked, day, f"{leaked} must not be public")
+
+    def test_the_public_shape_is_an_allowlist_not_a_denylist(self):
+        """
+        The regression that matters most. Both portal serializers are
+        `fields = '__all__'`; if the public ones ever became that, every field
+        added to Event afterwards would publish itself silently. Pinning the
+        exact key set fails the moment someone widens it.
+        """
+        self.assertEqual(
+            sorted(self._list().data[0]),
+            ["country", "cover_image", "event_type", "headline", "slug", "state", "year"],
+        )
+        detail = self._detail(self.published.slug).data
+        self.assertEqual(
+            sorted(detail),
+            ["country", "cover_image", "description", "event_days", "event_type",
+             "headline", "slug", "state", "year"],
+        )
+        self.assertEqual(
+            sorted(detail["event_days"][0]),
+            ["content", "date", "event_day_title", "headline", "images"],
+        )
+
+    def test_only_the_year_is_published_not_the_full_date(self):
+        self.assertEqual(self._list().data[0]["year"], 2027)
+
+    # ── galleries ────────────────────────────────────────────────────────────
+
+    def test_gallery_images_are_plain_permanent_urls(self):
+        """
+        Gallery images are on the PUBLIC bucket, so they serialize as ordinary
+        URLs — not the /files/ mint path the private tier uses. An anonymous
+        visitor has no token to mint with, so this is what makes the endpoint
+        usable at all.
+        """
+        EventImage.objects.create(
+            event=self.published, image="gallery/a/cover.jpg", is_primary=True,
+            alt_text="Cover",
+        )
+        EventImage.objects.create(
+            event=self.published, event_day=self.day, image="gallery/b/day.jpg",
+        )
+        cache.clear()
+
+        detail = self._detail(self.published.slug).data
+        self.assertNotIn("/api/v1/files/", detail["cover_image"]["image"])
+        self.assertEqual(detail["cover_image"]["alt_text"], "Cover")
+        self.assertEqual(len(detail["event_days"][0]["images"]), 1)
+
+    def test_an_event_with_no_images_serializes_without_error(self):
+        detail = self._detail(self.published.slug).data
+        self.assertIsNone(detail["cover_image"])
+
+    # ── caching ──────────────────────────────────────────────────────────────
+
+    def test_unpublishing_takes_effect_without_waiting_for_the_ttl(self):
+        """Staff who untick "publish" and reload must not still see the event —
+        the signal invalidates, the TTL is only a backstop."""
+        self.assertEqual(len(self._list().data), 1)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.published.is_published = False
+            self.published.save()
+
+        self.assertEqual(len(self._list().data), 0)
+
+    def test_a_new_gallery_image_appears_without_waiting_for_the_ttl(self):
+        self._detail(self.published.slug)  # prime the cache
+
+        with self.captureOnCommitCallbacks(execute=True):
+            EventImage.objects.create(
+                event=self.published, event_day=self.day, image="gallery/c/new.jpg",
+            )
+
+        self.assertEqual(len(self._detail(self.published.slug).data["event_days"][0]["images"]), 1)
+
+
+@override_settings(USE_R2_STORAGE=False)
+class PerImagePublishTests(TestCase):
+    """
+    The per-image flag. Two flags with opposite defaults, doing different jobs:
+
+        Event.is_published       default False — the SECURITY boundary
+        EventImage.is_published  default True  — an EDITORIAL filter inside a
+                                                 gallery that is already public
+
+    A permissive default here is safe precisely because the event flag gates it:
+    an unpublished event's images are unreachable however they are flagged.
+    """
+
+    def setUp(self):
+        self.client_user = User.objects.create_user(
+            first_name="Ada", last_name="Obi", email="perimage@example.com", password="x",
+        )
+        self.event = _make_event(self.client_user, title="Curated Wedding")
+        self.event.is_published = True
+        self.event.headline = "Curated"
+        self.event.save()
+        self.day = EventDay.objects.create(
+            owner=self.event, event_day_title="Event No. 1", date=datetime.date(2027, 6, 1),
+        )
+        cache.clear()
+
+    def _detail(self):
+        return public_views.portfolio_event_detail(
+            factory.get("/"), slug=self.event.slug,
+        ).data
+
+    def _list(self):
+        return public_views.portfolio_events(factory.get("/")).data
+
+    def test_images_are_published_by_default(self):
+        """Otherwise publishing an event shows a page with no photographs, which
+        trains staff to tick every box without looking."""
+        self.assertTrue(EventImage._meta.get_field("is_published").default)
+
+    def test_an_unpublished_image_is_absent_from_the_public_gallery(self):
+        EventImage.objects.create(
+            event=self.event, event_day=self.day, image="g/a.jpg", alt_text="keep",
+        )
+        EventImage.objects.create(
+            event=self.event, event_day=self.day, image="g/b.jpg", alt_text="hide",
+            is_published=False,
+        )
+        cache.clear()
+
+        images = self._detail()["event_days"][0]["images"]
+        self.assertEqual([i["alt_text"] for i in images], ["keep"])
+
+    def test_an_unpublished_image_still_shows_in_the_portal(self):
+        """The flag curates the WEBSITE. The client's own portal keeps every
+        photograph — that is the whole point of being able to withhold one."""
+        EventImage.objects.create(
+            event=self.event, event_day=self.day, image="g/b.jpg", is_published=False,
+        )
+        day_data = EventDaySerializer(self.day, context={"request": factory.get("/")}).data
+        self.assertEqual(len(day_data["images"]), 1)
+
+    def test_an_unpublished_cover_is_never_the_public_cover(self):
+        """
+        The sharpest failure this flag could have. `Event.cover_image` answers
+        the PORTAL's question — which image is primary — and reusing it would put
+        a withheld photograph on the portfolio index, the most visible page there
+        is.
+        """
+        EventImage.objects.create(
+            event=self.event, image="g/withheld.jpg", alt_text="withheld",
+            is_primary=True, is_published=False,
+        )
+        EventImage.objects.create(
+            event=self.event, image="g/ok.jpg", alt_text="ok", sort_order=1,
+        )
+        cache.clear()
+
+        # The portal still calls the withheld one the cover...
+        self.assertEqual(self.event.cover_image.alt_text, "withheld")
+        # ...and the public index must not.
+        self.assertEqual(self._list()[0]["cover_image"]["alt_text"], "ok")
+        self.assertEqual(self._detail()["cover_image"]["alt_text"], "ok")
+
+    def test_hiding_every_image_leaves_a_null_cover_not_an_error(self):
+        EventImage.objects.create(
+            event=self.event, image="g/a.jpg", is_primary=True, is_published=False,
+        )
+        cache.clear()
+        self.assertIsNone(self._list()[0]["cover_image"])
+
+    def test_the_flag_does_nothing_while_the_event_is_unpublished(self):
+        """The event flag is the gate; this one only sorts what is already
+        through it."""
+        self.event.is_published = False
+        self.event.save()
+        EventImage.objects.create(event=self.event, image="g/a.jpg")
+        cache.clear()
+
+        resp = public_views.portfolio_event_detail(factory.get("/"), slug=self.event.slug)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_toggling_an_image_takes_effect_without_waiting_for_the_ttl(self):
+        image = EventImage.objects.create(
+            event=self.event, event_day=self.day, image="g/a.jpg",
+        )
+        self.assertEqual(len(self._detail()["event_days"][0]["images"]), 1)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            image.is_published = False
+            image.save()
+
+        self.assertEqual(len(self._detail()["event_days"][0]["images"]), 0)

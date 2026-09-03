@@ -56,6 +56,19 @@ class Event(AttributedModel):
         blank=True, null=True,
         help_text="Long-form narrative for the public page — the paragraphs under `headline`.",
     )
+    # OPT-IN, and the default matters more than the field: every event in this
+    # table belongs to a real client, and most of them are jobs in progress
+    # rather than portfolio pieces. Defaulting to False means an event becomes
+    # public only when someone says so, and a bug in the public API's filtering
+    # exposes nothing until that has happened. Publishing is event-level: it
+    # takes the event's days and their galleries with it.
+    is_published = models.BooleanField(
+        default=False,
+        help_text=(
+            "Show this event on the public portfolio. Off by default — publishing "
+            "also exposes every event day and gallery image beneath it."
+        ),
+    )
     
     groom_name = models.CharField(max_length=255, blank = True, null=True)
     bride_name = models.CharField(max_length=255, blank = True, null=True)
@@ -271,6 +284,30 @@ class EventImage(AttributedModel):
     is_primary = models.BooleanField(
         default=False,
         help_text="The cover for this gallery. At most one per event, and one per event day.",
+    )
+    # Per-image curation WITHIN a published event. Defaults to True, which is
+    # the opposite of Event.is_published and deliberately so — the two flags do
+    # different jobs:
+    #
+    #   Event.is_published  is the SECURITY boundary. Default False, because
+    #                       every event belongs to a real client and must not
+    #                       become public by accident.
+    #   this flag           is an EDITORIAL filter inside a gallery that is
+    #                       already public. Defaulting it False would mean
+    #                       publishing an event shows a page with no
+    #                       photographs until someone ticks forty checkboxes,
+    #                       which trains staff to tick them all without looking.
+    #
+    # Nothing is public until the event is published, so a permissive default
+    # here costs no exposure: it only decides which of an already-public
+    # event's photographs appear.
+    is_published = models.BooleanField(
+        default=True,
+        help_text=(
+            "Show this photograph on the public portfolio. Has no effect until the "
+            "event itself is published. Untick to keep a shot in the client's portal "
+            "without putting it on the website."
+        ),
     )
     sort_order = models.PositiveIntegerField(
         default=0, help_text="Ascending display order within the gallery; ties break on upload time.",

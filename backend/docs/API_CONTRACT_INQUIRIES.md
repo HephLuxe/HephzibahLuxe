@@ -10,8 +10,14 @@ error envelope, upload ceilings) live in [`API_CONTRACT.md`](./API_CONTRACT.md).
 The backend design rationale lives in `apps/inquiries/README.md`. Rate-limit
 mechanics live in [`RATE_LIMITING_GUIDE.md`](./RATE_LIMITING_GUIDE.md).
 
-**Base URL:** every path below is relative to `/api/v1/`.
-**Trailing slashes are mandatory.** A slashless POST is not redirected.
+**Base URL:** `https://api.hephzibahluxe.com/api/v1` — every path below is
+relative to it.
+
+**Trailing slashes are mandatory.** `APPEND_SLASH` is on, so a slashless POST is
+*not* refused outright — Django answers it with a `301` to the slashed URL, and
+the redirect drops the body and downgrades the method. What you actually observe
+is a `GET` coming back `405`, which looks nothing like the missing slash that
+caused it. Always send the slash.
 
 ---
 
@@ -236,11 +242,13 @@ a VPN or a locked-down browser.
 | Score below the threshold | 400 |
 | Wrong or missing `action` | 400 |
 
-**Current threshold: the inquiry action is in monitor mode (`0.0`).** Every token
-is still verified and the `success`/`action` checks still reject, but nothing is
-turned away on score while the reCAPTCHA console accumulates a real distribution
-for this site. **This will be raised.** Build the rejection path now — do not
-assume score rejections never happen because they currently don't.
+**The score threshold is env-tuned — treat score rejections as live.** It is read
+from `RECAPTCHA_MIN_SCORE_SUBMIT_INQUIRY`, falling back to a code default of
+**`0.5`** (Google's own recommended starting point). It can be lowered or raised
+server-side without a deploy, so whatever you observe in one environment is not a
+guarantee about another — and in local dev nothing is scored at all, because no
+secret is configured there. **Build the rejection path now**; do not infer from a
+clean run that score rejections never happen.
 
 ---
 
@@ -343,7 +351,7 @@ list in `detail`** — not a silent fallback, so a typo surfaces immediately.
 ```json
 {
   "count": 42,
-  "next": "https://api.example.com/api/v1/inquiries/?page=2",
+  "next": "https://api.hephzibahluxe.com/api/v1/inquiries/?page=2",
   "previous": null,
   "results": [ /* InquiryRead objects — §5.3 */ ]
 }
@@ -397,9 +405,9 @@ read-only.**
   "details": "Expecting 250 guests…",
   "status": "contacted",
   "status_display": "Contacted",
-  "created_at": "2026-08-30T09:12:44Z",
+  "created_at": "2026-08-30T09:12:44.481223Z",
   "created_by_display": "",
-  "updated_at": "2026-08-30T11:02:10Z",
+  "updated_at": "2026-08-30T11:02:10.117904Z",
   "last_updated_by_display": "Winnie Adeyemi"
 }
 ```
@@ -412,6 +420,10 @@ read-only.**
   …" line. Resolved at read time, so a staff rename propagates.
 - **`budget` is a string**, or `null` when the lead chose "not sure yet". Format
   the ₦ and thousands separators yourself.
+- **Timestamps are ISO-8601 UTC with microseconds** and a `Z` suffix
+  (`"2026-08-30T09:12:44.481223Z"`). Parse them, don't regex them — the
+  fractional part is present and `USE_TZ` is on, so every instant you get back is
+  UTC and it is your job to render it in the viewer's zone.
 - Raw actor FK ids are stripped — you get the `_display` strings only.
 
 ### 5.4 · `PATCH /inquiries/<uuid>/status/` — triage

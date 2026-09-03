@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.core.serializers import AttributionSerializerMixin
+from apps.core.serializers import AttributionSerializerMixin, PrivateFileURLField
 
 from .models import (
     Meeting,
@@ -14,27 +14,20 @@ from .services import field_is_answered
 
 
 class PrepItemFileUploadSerializer(serializers.ModelSerializer):
-    file_url = serializers.SerializerMethodField()
+    # Was a SerializerMethodField returning the raw storage URL, absolutized via
+    # the request when one was in context. That had a standing bug worth
+    # recording: none of the meetings views pass context={"request": request},
+    # so it always took the fallback branch and returned a bare signed R2 URL
+    # carrying a one-hour expiry.
+    #
+    # The mint path replaces both halves. It needs no request (it is a fixed
+    # path, so the "absolutize it" problem disappears), and the URL it produces
+    # is authorised per call and lives 60 seconds. See apps/core/filelinks.py.
+    file_url = PrivateFileURLField("prep-upload")
 
     class Meta:
         model = PrepItemFileUpload
         fields = ["id", "filename", "file_url", "uploaded_at"]
-
-    def get_file_url(self, obj: PrepItemFileUpload) -> str | None:
-        # Falls back to the storage URL when there is no request in context,
-        # matching what DRF's own FileField does. The previous version returned
-        # None instead, and since none of the meetings views pass
-        # context={"request": request}, that made file_url null on EVERY path —
-        # a client could upload an inspiration board and then had no way to
-        # fetch it back. On R2 obj.file.url is already absolute (signed, see
-        # AWS_QUERYSTRING_AUTH in config/settings.py), so build_absolute_uri is
-        # a no-op there and only matters for the relative URLs dev/test storage
-        # produces.
-        if not obj.file:
-            return None
-        request = self.context.get("request")
-        url = obj.file.url
-        return request.build_absolute_uri(url) if request else url
 
 class PrepItemResponseSerializer(serializers.ModelSerializer):
     class Meta:

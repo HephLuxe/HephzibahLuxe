@@ -12,6 +12,7 @@ The primary event workspace.
 * **title**: CharField representation. **Derived**, never client-supplied — see `generate_event_title`.
 * **headline**: Editorial headline for the public page. Free text, written by staff.
 * **description**: Long-form narrative for the public page — the paragraphs under `headline`.
+* **is_published**: Opt-in flag (default **False**) that puts this event on the public portfolio, along with every event day and gallery image beneath it.
 * **slug**: Unique SlugField auto-generated from `title`.
 * **event_date**: DateField.
 * **event_venue**: CharField.
@@ -41,6 +42,7 @@ One photograph in a gallery. Serves both levels, told apart by `event_day`.
 * **image**: The file. `max_length=500`, public storage, saved exactly as uploaded — nothing is resized or re-encoded.
 * **alt_text**: Screen-reader description.
 * **is_primary**: This gallery's cover. At most one per event and one per event day, enforced by two partial unique constraints.
+* **is_published**: Show this photograph on the public portfolio. **Default True** — see the note below on why the two publish flags have opposite defaults.
 * **sort_order**: Ascending display order; ties break on `created_at` so the order is total.
 
 ---
@@ -175,6 +177,79 @@ Migration `0012_migrate_single_images_to_gallery` carries any existing
 columns, and is reversible. It moves no blobs — it repoints the new row at the
 path the file already occupies, so those carried-over rows keep the old layout
 for ever, which is harmless.
+
+---
+
+## The public portfolio API
+
+Two **unauthenticated** read endpoints — the only ones on the platform:
+
+| Route | Returns |
+|---|---|
+| `GET /portfolio/events/` | published events, newest first, as index tiles |
+| `GET /portfolio/events/<slug>/` | one published event + its days + galleries |
+
+A private event leaking would require **two** independent failures, which is why
+the filtering and the shaping are kept apart:
+
+1. **The view filters `is_published=True`.** An unpublished slug is a **404**,
+   not a 200 with fields stripped — a 403 would confirm the event exists, which
+   is itself a fact about a private client engagement.
+2. **The serializers are allowlists** (`public_serializers.py`). The portal
+   serializers are `fields = '__all__'`; reused here, that would publish **every
+   field added to either model from then on**, with no code change and nothing
+   to review. Making a field public is a deliberate edit to that file.
+
+What the portal shapes would have exposed, and these do not:
+
+| Model | Withheld |
+|---|---|
+| `Event` | `celebrant` (**the client's email address**), `title` (derived from celebrant names), the name fields, attribution, timestamps, `id` |
+| `EventDay` | `venue`, `venue_address` (**often a family residence**), `estimated_guest_count`, `venue_booking_status`, `dress_code`, `start_time`, `end_time` |
+| `EventImage` | `id`, `event`, `event_day`, attribution, timestamps |
+
+`event_date` is reduced to `year`, since the eyebrow reads `LAGOS, NIGERIA —
+2021` and the exact date is a private detail the page never shows.
+
+**Publishing is event-level, with per-image curation.** There is no per-day
+flag: publishing an event publishes its days. Within a published event,
+`EventImage.is_published` decides which photographs the website shows.
+
+The two flags have **opposite defaults**, deliberately:
+
+| Flag | Default | Job |
+|---|---|---|
+| `Event.is_published` | `False` | the **security** boundary — every event belongs to a real client and must not become public by accident |
+| `EventImage.is_published` | `True` | an **editorial** filter *inside* a gallery that is already public |
+
+A permissive default on images costs no exposure, because the event flag gates
+them: an unpublished event's images are unreachable however they are flagged.
+Defaulting them to `False` instead would mean publishing an event shows a page
+with no photographs until someone ticks forty checkboxes — which trains staff to
+tick them all without looking, and that is a worse outcome than the default it
+was trying to protect.
+
+**The public cover is the primary among *published* images**, not
+`Event.cover_image`. The model property answers the portal's question ("which
+image is this gallery's cover"), which is a different question from the public
+one ("which image may the website show"). Reusing it would put a withheld
+photograph on the portfolio index — the most visible page there is — whenever the
+cover happened to be one staff unticked.
+
+Staff curate from the Django admin: `is_published` is a filter, an inline
+checkbox on the event and the day, a `list_editable` column with thumbnails, and
+a pair of bulk actions.
+
+**Gallery images serialize as plain permanent URLs**, not the `/files/` mint path
+the private tier uses — they are on the public bucket behind a custom domain, and
+an anonymous visitor has no token to mint with. That is what makes these
+endpoints possible at all.
+
+**Caching.** Both responses are cached for 5 minutes, and `signals.py`
+invalidates on any `Event` / `EventDay` / `EventImage` write so a publish is
+visible on the next request rather than up to five minutes later. The admin's
+bulk publish/unpublish actions use `queryset.update()`, which bypasses `save()`
+and therefore the receiver, so they clear the cache explicitly.
 
 ---
 
