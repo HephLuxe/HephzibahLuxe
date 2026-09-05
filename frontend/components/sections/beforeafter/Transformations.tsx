@@ -121,7 +121,7 @@
 
 "use client";
 
-import ScrollReveal from "@/components/ui/ScrollReveal";
+import ScrollRevealSlider from "@/components/ui/ScrollRevealSlider";
 
 const transformations = [
     {
@@ -168,7 +168,7 @@ interface TransformationProps {
 
 function Transformation({ item }: TransformationProps) {
     return (
-        <div data-scroll-pin className="relative h-[200vh]">
+        <div data-scroll-pin className="relative h-[200vh] bg-[#EEEEEE]">
             <section className="sticky top-[-40px] bg-[#EEEEEE] flex items-center z-10">
                 <div className="w-full max-w-7xl 2xl:max-w-[1600px] mx-auto px-6 sm:px-8 md:px-10 lg:px-10 xl:px-14 2xl:px-20 py-10 sm:py-12 md:py-14 lg:py-12 xl:py-16 2xl:py-20">
                     <div className="grid grid-cols-1 lg:grid-cols-10 gap-12 lg:gap-16 xl:gap-20 2xl:gap-24 items-start">
@@ -180,7 +180,7 @@ function Transformation({ item }: TransformationProps) {
                                 {item.subtitle}
                             </h3>
                             <div className="lg:hidden mb-10 sm:mb-12 md:mb-14">
-                                <ScrollReveal beforeImg={item.beforeImg} afterImg={item.afterImg} />
+                                <ScrollRevealSlider beforeImg={item.beforeImg} afterImg={item.afterImg} />
                             </div>
                             <h2 className="font-display font-thin text-primary text-center mb-8 sm:mb-10 md:mb-10 lg:mb-10 xl:mb-12 text-[44px] leading-[1.05] sm:text-[56px] sm:leading-[1.05] md:text-[72px] md:leading-[1.05] lg:text-[92px] lg:leading-[92px] xl:text-[108px] xl:leading-[108px] 2xl:text-[124px] 2xl:leading-[124px]">
                                 {item.title.split("\n").map((line, i) => (
@@ -194,7 +194,7 @@ function Transformation({ item }: TransformationProps) {
                             </p>
                         </div>
                         <div className={`hidden lg:block lg:col-span-4 ${item.sliderOnRight ? "lg:order-2" : "lg:order-1"}`}>
-                            <ScrollReveal beforeImg={item.beforeImg} afterImg={item.afterImg} />
+                            <ScrollRevealSlider beforeImg={item.beforeImg} afterImg={item.afterImg} />
                         </div>
                     </div>
                 </div>

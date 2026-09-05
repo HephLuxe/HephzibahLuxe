@@ -7,11 +7,12 @@ const portfolioImages = [
   "/images/portfoliopage/portfolioonee.jpg",
   "/images/portfoliopage/portfoliotwo.jpg",
   "/images/intro/introfives.jpg",
+  "/images/portfoliopage/newportfoliofourr.jpg",
   "/images/portfoliopage/portfoliofive.jpg",
-  "/images/portfoliopage/newportfolioone.jpg",
+  "/images/portfoliopage/portfoliosix.jpg",
   "/images/portfoliopage/newportfoliotwo.jpg",
+  "/images/portfoliopage/newportfolioone.jpg",
   "/images/portfoliopage/newportfoliothree.jpg",
-  "/images/portfoliopage/newportfoliofour.jpg",
 ];
 
 export default function PortfolioHero() {
