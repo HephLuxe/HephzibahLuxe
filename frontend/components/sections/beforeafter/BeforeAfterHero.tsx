@@ -32,48 +32,88 @@
 
 
 
+// import Image from "next/image";
+
+// export default function BeforeAfterHero() {
+//     return (
+//         <section className="relative w-full h-[40vh] landscape:h-[95vh] sm:h-[50vh] md:h-[50vh] lg:h-[100vh] xl:h-[100vh] overflow-hidden">
+//             {/* Split background images */}
+//             <div className="absolute inset-0 flex">
+//                 <div
+//                     className="w-1/2 bg-cover bg-center"
+//                     style={{ backgroundImage: "url(/images/beforeafterpage/beforebgg.jpg)" }}
+//                 />
+//                 <div
+//                     className="w-1/2 bg-cover bg-center"
+//                     style={{ backgroundImage: "url(/images/beforeafterpage/afterbgg.jpg)" }}
+//                 />
+//             </div>
+
+//             {/* Text overlay — & at dead center */}
+//             <div className="absolute inset-0 flex items-center justify-center">
+//                 {/* BEFORE — ends at the & */}
+//                 <h1
+//                     className="font-display font-thin italic absolute text-primary leading-[1] text-[42px] sm:text-[58px] md:text-[80px] lg:text-[140px] xl:text-[160px] 2xl:text-[180px] right-[50%] mr-7 sm:mr-10 md:mr-14 lg:mr-[100px] xl:mr-[100px] 2xl:mr-[150px]"
+//                 >
+//                     BEFORE
+//                 </h1>
+
+//                 {/* & icon — dead center */}
+//                 <Image
+//                     src="/icons/andsigns.svg"
+//                     alt="and"
+//                     width={144}
+//                     height={144}
+//                     className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-28 lg:h-28 xl:w-32 xl:h-32 2xl:w-36 2xl:h-36 object-contain z-10"
+//                 />
+
+//                 {/* After — starts at the & */}
+//                 <h1
+//                     className="font-display font-thin italic absolute text-background leading-[1] text-[52px] sm:text-[76px] md:text-[108px] lg:text-[190px] xl:text-[220px] 2xl:text-[250px] left-[50%] ml-7 sm:ml-10 md:ml-14 lg:ml-[100px] xl:ml-[100px] 2xl:ml-[150px]"
+//                 >
+//                     After
+//                 </h1>
+//             </div>
+//         </section>
+//     );
+// }
+
+
+
 import Image from "next/image";
 
 export default function BeforeAfterHero() {
-    return (
-        <section className="relative w-full h-[40vh] landscape:h-[95vh] sm:h-[50vh] md:h-[50vh] lg:h-[100vh] xl:h-[100vh] overflow-hidden">
-            {/* Split background images */}
-            <div className="absolute inset-0 flex">
-                <div
-                    className="w-1/2 bg-cover bg-center"
-                    style={{ backgroundImage: "url(/images/beforeafterpage/beforebgg.jpg)" }}
-                />
-                <div
-                    className="w-1/2 bg-cover bg-center"
-                    style={{ backgroundImage: "url(/images/beforeafterpage/afterbgg.jpg)" }}
-                />
-            </div>
+  return (
+    <section className="relative w-full h-[40vh] landscape:h-[95vh] sm:h-[50vh] md:h-[50vh] lg:h-[100vh] xl:h-[100vh] overflow-hidden">
+      {/* Mobile/landscape/iPad background */}
+      <Image
+        src="/images/beforeafterpage/bnahero.jpg"
+        alt="Explore our services"
+        fill
+        priority
+        className="object-cover lg:hidden"
+        sizes="100vw"
+      />
 
-            {/* Text overlay — & at dead center */}
-            <div className="absolute inset-0 flex items-center justify-center">
-                {/* BEFORE — ends at the & */}
-                <h1
-                    className="font-display font-thin italic absolute text-primary leading-[1] text-[42px] sm:text-[58px] md:text-[80px] lg:text-[140px] xl:text-[160px] 2xl:text-[180px] right-[50%] mr-7 sm:mr-10 md:mr-14 lg:mr-[100px] xl:mr-[100px] 2xl:mr-[150px]"
-                >
-                    BEFORE
-                </h1>
+      {/* Laptop+ background */}
+      <Image
+        src="/images/beforeafterpage/bnahero.jpg"
+        alt="Explore our services"
+        fill
+        priority
+        className="object-cover hidden lg:block"
+        sizes="100vw"
+      />
 
-                {/* & icon — dead center */}
-                <Image
-                    src="/icons/andsigns.svg"
-                    alt="and"
-                    width={144}
-                    height={144}
-                    className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-28 lg:h-28 xl:w-32 xl:h-32 2xl:w-36 2xl:h-36 object-contain z-10"
-                />
-
-                {/* After — starts at the & */}
-                <h1
-                    className="font-display font-thin italic absolute text-background leading-[1] text-[52px] sm:text-[76px] md:text-[108px] lg:text-[190px] xl:text-[220px] 2xl:text-[250px] left-[50%] ml-7 sm:ml-10 md:ml-14 lg:ml-[100px] xl:ml-[100px] 2xl:ml-[150px]"
-                >
-                    After
-                </h1>
-            </div>
-        </section>
-    );
+      {/* Heading overlay */}
+      <div className="relative z-10 flex h-full items-end px-6 pb-10 sm:px-8 sm:pb-12 md:px-10 md:pb-14 lg:px-12 lg:pb-16 xl:px-16 xl:pb-10 2xl:px-20 2xl:pb-12">
+        <h1 className="font-display font-thin text-background tracking-[-0.005em] text-[50px] leading-[60px] sm:text-[72px] sm:leading-[76px] md:text-[96px] md:leading-[100px] lg:text-[140px] lg:leading-[145px] xl:text-[140px] xl:leading-[165px] 2xl:text-[180px] 2xl:leading-[185px]">
+          <span className="block">CANVAS</span>
+          <span className="block">
+            <em className="italic font-thin">to</em> CELEBRATION
+          </span>
+        </h1>
+      </div>
+    </section>
+  );
 }
