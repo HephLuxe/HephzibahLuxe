@@ -1,3 +1,4 @@
+from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -10,7 +11,7 @@ from apps.core.permissions import IsStaffOrSuperuser, can_access_portal, enforce
 from apps.core.utils import save_with_attribution
 
 from . import services
-from .models import ClientPortal, TeamMember
+from .models import ClientPortal, EventEngagement, TeamMember
 from .serializers import (
     ActivateEventSerializer,
     AssignTeamMemberSerializer,
@@ -144,11 +145,37 @@ def activate_event(request):
 
     event = Event.objects.get(slug=serializer.validated_data["event_slug"])
 
+    # A portal may only be bound to its own client's event. Without this a
+    # mistyped slug would surface one client's event (and everything attached
+    # to it) in another client's portal.
+    if event.celebrant_id is None or event.celebrant_id != portal.user_id:
+        return _error(
+            "This event does not belong to this portal's client.",
+            VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Event.engagement is one-to-one, so an event already engaged on another
+    # portal cannot be bound here. Previously that surfaced as an
+    # IntegrityError 500 from activate_engagement's get_or_create.
+    existing = EventEngagement.objects.filter(event=event).only("portal_id").first()
+    if existing is not None and existing.portal_id != portal.id:
+        return _error(
+            "This event is already linked to a different portal.",
+            VALIDATION_ERROR, status.HTTP_409_CONFLICT,
+        )
+
     previous_engagement = portal.active_engagement
     is_switching_away = bool(previous_engagement and previous_engagement.event_id != event.id)
     hidden_content = services.get_engagement_content_summary(previous_engagement) if is_switching_away else {}
 
-    services.activate_engagement(portal, event)
+    try:
+        services.activate_engagement(portal, event)
+    except IntegrityError:
+        # A concurrent request engaged the event between the check and the write.
+        return _error(
+            "This event is already linked to a different portal.",
+            VALIDATION_ERROR, status.HTTP_409_CONFLICT,
+        )
 
     data = PortalOverviewSerializer(portal).data
     if is_switching_away:

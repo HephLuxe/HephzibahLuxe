@@ -17,6 +17,7 @@ entry and the security-critical part is written once.
 
 import logging
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -72,9 +73,10 @@ def mint_file_url(request, file_type: str, obj_id):
     model = spec.get_model()
     try:
         instance = model.objects.get(pk=obj_id)
-    except (model.DoesNotExist, ValueError, TypeError):
-        # ValueError/TypeError: a malformed id for this model's pk type. A bad
-        # id is "not found", not a 500.
+    except (model.DoesNotExist, ValueError, TypeError, DjangoValidationError):
+        # ValueError/TypeError/DjangoValidationError: a malformed id for this
+        # model's pk type (a UUID pk raises the last one). A bad id is "not
+        # found", not a 500, and the same "not found" as every other refusal.
         return _error(f"No such {spec.label}.", NOT_FOUND, status.HTTP_404_NOT_FOUND)
 
     if not _may_read(request.user, spec.engagement(instance)):

@@ -79,6 +79,23 @@ def _list_response(request, queryset, serializer_cls):
     return paginator.get_paginated_response(data)
 
 
+def _user_visible_to(actor, email: str):
+    """The user at ``email`` if ``actor`` may see them (staff, or themselves), else None.
+
+    "No such account" and "an account you may not see" deliberately come back
+    the same, so the by-email lists below cannot be used to test which
+    addresses are registered. Same reasoning as accounts.views.UserInfowEmail.
+    """
+    user = get_user_model().objects.filter(email=email).first()
+    if user is None or not (is_staff_or_superuser(actor) or actor == user):
+        return None
+    return user
+
+
+def _user_not_found() -> Response:
+    return _error("User not found.", NOT_FOUND, status.HTTP_404_NOT_FOUND)
+
+
 def _event_details_locked_for_event(event: Event) -> bool:
     """
     event_details_locked lives on EventEngagement (not Event) — mirrors
@@ -241,21 +258,16 @@ def getall_event(request):
 def getall_event_email(request, email):
     """
     GET — list all events belonging to a specific user, looked up by email.
-    Staff/superusers can look up any user. Clients can only look up themselves.
+    Staff/superusers can look up any user. Clients can only look up themselves;
+    anyone else gets the same 404 as an unknown address. Paginated, in the same
+    {count, next, previous, results} envelope as getall_event.
     """
-    User = get_user_model()
-    try:
-        user = User.objects.get(email=email)
-    except User.DoesNotExist:
-        return _error("User with this email does not exist.", NOT_FOUND, status.HTTP_404_NOT_FOUND)
-
-    enforce(is_staff_or_superuser(request.user) or request.user == user, "You don't have permission to view this user's events")
+    user = _user_visible_to(request.user, email)
+    if user is None:
+        return _user_not_found()
 
     events = Event.objects.select_related("celebrant").prefetch_related("images").filter(celebrant=user)
-    return Response(
-        EventSerializer(events, many=True, context={"request": request}).data,
-        status=status.HTTP_200_OK,
-    )
+    return _list_response(request, events, EventSerializer)
 
 
 @api_view(['PUT', 'PATCH'])
@@ -431,13 +443,9 @@ def getall_eventday_email(request, email):
     GET — list all event days belonging to a specific user, looked up by email.
     Staff/superusers can look up any user. Clients can only look up themselves.
     """
-    User = get_user_model()
-    try:
-        user = User.objects.get(email=email)
-    except User.DoesNotExist:
-        return _error("User with this email does not exist.", NOT_FOUND, status.HTTP_404_NOT_FOUND)
-
-    enforce(is_staff_or_superuser(request.user) or request.user == user)
+    user = _user_visible_to(request.user, email)
+    if user is None:
+        return _user_not_found()
 
     event_days = EventDay.objects.select_related("owner", "owner__celebrant").prefetch_related("images").filter(
         owner__celebrant=user

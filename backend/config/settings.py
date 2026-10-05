@@ -100,6 +100,13 @@ REST_FRAMEWORK = {
         'DEFAULT_AUTHENTICATION_CLASSES': (
             'rest_framework_simplejwt.authentication.JWTAuthentication',
         ),
+    # Default-deny. A view that forgets @permission_classes is authenticated-only
+    # rather than public; every intentionally public endpoint opts out explicitly
+    # (permission_classes([]) / AllowAny), and apps/core/test_public_endpoints.py
+    # pins the exact public set.
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
     # Unhandled exceptions get the standard {detail, code} envelope + logging.
     # DRF-handled 4xx responses pass through unchanged (see apps/core/exceptions.py).
     'EXCEPTION_HANDLER': 'apps.core.exceptions.custom_exception_handler',
@@ -422,7 +429,25 @@ SIMPLE_JWT = {
     "SLIDING_TOKEN_OBTAIN_SERIALIZER": "rest_framework_simplejwt.serializers.TokenObtainSlidingSerializer",
     "SLIDING_TOKEN_REFRESH_SERIALIZER": "rest_framework_simplejwt.serializers.TokenRefreshSlidingSerializer",
 
-    "CHECK_REVOKE_TOKEN": False,
+    # Ends ACCESS tokens on a password change, which blacklisting alone cannot
+    # (it only covers refresh tokens). Token.for_user stamps every token with
+    # REVOKE_TOKEN_CLAIM = MD5 of the user's current password hash, so login,
+    # the force-change pair and RefreshToken.for_user all carry it, and
+    # RefreshToken.access_token copies it into each refreshed access token.
+    # JWTAuthentication.get_user compares it with the stored hash on every
+    # request: after set_password() a mismatch is a 401 {detail, code:
+    # "password_changed"} (SimpleJWT sets the code; the envelope keeps it).
+    #
+    # Rollout: an access token minted before this was turned on has no claim
+    # and fails the same way, so enabling it signs everyone out once. Its
+    # refresh token still refreshes (200), but the new access token inherits the
+    # missing claim and 401s too; frontend/lib/auth.ts retries once, then
+    # clears tokens and sends the user to login.
+    #
+    # Note: the refresh endpoint does NOT check the claim. An old refresh token
+    # is stopped only because every password-change path also blacklists the
+    # user's refresh tokens (services._revoke_refresh_tokens); keep it that way.
+    "CHECK_REVOKE_TOKEN": True,
     "REVOKE_TOKEN_CLAIM": "hash_password",
     "CHECK_USER_IS_ACTIVE": True,
 }

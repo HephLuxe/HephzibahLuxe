@@ -39,7 +39,9 @@ developer's own password on every push.
 import secrets
 
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from apps.accounts import developers
@@ -90,13 +92,31 @@ class Command(BaseCommand):
             return
 
         dry_run = options["dry_run"]
+        User = get_user_model()
         if options["password"]:
+            # The same AUTH_PASSWORD_VALIDATORS every other way of setting a
+            # password goes through. Checked up front, against each address it
+            # could be applied to, so a weak password writes nothing at all.
+            # Only reached with --password: the bare `ensure_developer` the
+            # Procfile runs on every boot generates a random one and skips this.
+            for email in emails:
+                candidate = User(
+                    email=email,
+                    first_name=options["first_name"],
+                    last_name=options["last_name"],
+                )
+                try:
+                    validate_password(options["password"], candidate)
+                except ValidationError as exc:
+                    raise CommandError(
+                        "--password does not meet the password policy: "
+                        + " ".join(exc.messages)
+                    ) from exc
             self.stdout.write(self.style.WARNING(
                 "--password was supplied. It is now in this shell's history and "
                 "in the deploy log. Change it after first sign-in."
             ))
 
-        User = get_user_model()
         created = repaired = unchanged = 0
 
         for email in emails:

@@ -117,10 +117,6 @@ _password_reset_confirm = _rl(
 )
 
 urlpatterns = [
-    # ── Health ──────────────────────────────────────────────────
-    path('', views.Home, name='home'),  # GET
-    path('secure/', views.secure, name='secure'),  # GET
-
     # ── Auth & tokens ───────────────────────────────────────────
     # Public POST endpoints are rate-limited (credential stuffing, code guessing,
     # email-bomb / enumeration). logout + force-password-change are authenticated,

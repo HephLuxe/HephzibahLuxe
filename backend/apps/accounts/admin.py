@@ -488,6 +488,10 @@ class CustomUserAdmin(UserAdmin):
         response = super().user_change_password(request, id, form_url)
         if request.method == "POST" and response.status_code == 302:
             user = self.get_object(request, unquote(id))
+            if user:
+                # Same rule as the API's reset and force-change: a new password
+                # ends every session that was signed in under the old one.
+                services._revoke_refresh_tokens(user)
             if user and (user.force_password_change or user.temporary_password_created_at):
                 user.force_password_change = False
                 user.temporary_password_created_at = None

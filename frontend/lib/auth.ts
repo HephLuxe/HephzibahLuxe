@@ -10,6 +10,8 @@
 //   POST auth/token/          {email, password}  -> {access, refresh, user}
 //   POST auth/token/refresh/  {refresh}          -> {access, refresh}  (rotates; old refresh is blacklisted)
 //   POST auth/token/logout/   {refresh} + Bearer -> blacklists the refresh token
+//   POST auth/force-password-change/ {new_password, confirm_password} + Bearer
+//                             -> {detail, access, refresh}  (all prior refresh tokens are blacklisted)
 //   Access lives 1h, refresh 7d.
 
 import { useEffect, useState } from "react";
@@ -214,12 +216,17 @@ export async function logout(): Promise<void> {
   }
 }
 
-/** POST auth/force-password-change/ for a user logged in with a temporary password. */
+/**
+ * POST auth/force-password-change/ for a user logged in with a temporary password.
+ * The backend revokes every refresh token the user holds (this session's too)
+ * and returns a fresh {access, refresh} pair, which replaces the stored one.
+ */
 export async function forcePasswordChange(newPassword: string, confirmPassword: string): Promise<void> {
-  await authFetch("/api/v1/auth/force-password-change/", {
+  const data = await authFetch<TokenPair & { detail: string }>("/api/v1/auth/force-password-change/", {
     method: "POST",
     json: { new_password: newPassword, confirm_password: confirmPassword },
   });
+  storeTokens(data);
 }
 
 export function fetchCurrentUser(): Promise<CurrentUser> {

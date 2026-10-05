@@ -1,6 +1,7 @@
 import logging
 
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from django_ratelimit.exceptions import Ratelimited
@@ -26,6 +27,7 @@ from apps.core.utils import save_with_attribution
 
 from ..core.permissions import IsStaffOrSuperuser, enforce, is_staff_or_superuser
 from . import developers, login_guard, services
+from .models import PasswordResetToken, UserRole
 from .serializers import (
     AdminUserCreationSerializer,
     CustomTokenObtainPairSerializer,
@@ -48,17 +50,6 @@ def _error(detail: str, code: str, http_status: int, errors: dict | None = None)
     if errors:
         body["errors"] = errors
     return Response(body, status=http_status)
-
-
-@api_view(['GET'])
-def Home(request):
-    return Response("working!!")
-
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def secure(request):
-    return Response("Secure working!!")
 
 
 ###############################################     USER       ###############################################
@@ -181,6 +172,13 @@ def set_user_status(request, email):
     else:
         return _error("is_active must be a boolean.", VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST)
 
+    # Plain staff manage clients only: switching a staff or admin account off
+    # (or back on) is reserved for a superuser, i.e. an admin or developer.
+    enforce(
+        user.role == UserRole.CLIENT or request.user.is_superuser,
+        "Only an administrator can deactivate or reactivate staff or admin accounts.",
+    )
+
     # services raises ValidationError for self-deactivation — let it propagate to
     # custom_exception_handler rather than re-mapping it here.
     if make_active:
@@ -298,13 +296,25 @@ class ForcePasswordChangeView(APIView):
             return _error("Invalid password data.", VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST, errors=serializer.errors)
 
         new_password = serializer.validated_data['new_password']
-        user.set_password(new_password)
-        user.force_password_change = False
-        user.temporary_password_created_at = None
-        user.save()
+        with transaction.atomic():
+            user.set_password(new_password)
+            user.force_password_change = False
+            user.temporary_password_created_at = None
+            user.save()
+            # A password change ends every session minted under the old
+            # password, including the one making this request: its refresh token
+            # is blacklisted along with the rest. That is why a fresh pair is
+            # issued below, in the same {access, refresh} shape as login, so the
+            # caller stays signed in on the new credentials without a re-login.
+            services._revoke_refresh_tokens(user)
+            refresh = RefreshToken.for_user(user)
 
         return Response(
-            {"detail": "Password changed successfully. You now have full access to the platform."},
+            {
+                "detail": "Password changed successfully. You now have full access to the platform.",
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+            },
             status=status.HTTP_200_OK
         )
 
@@ -581,6 +591,25 @@ class PasswordResetConfirmView(APIView):
         User = get_user_model()
         user = User.objects.get(email=email)
 
+        # Validation above ran without a lock, so two requests carrying the same
+        # code can both get this far. The row lock plus the is_used re-check is
+        # what makes the code single-use: the second request waits on the first,
+        # then sees the token already spent and is refused. Everything the reset
+        # does (password, lockout counters, session revocation, marking the code
+        # used) commits together or not at all.
+        with transaction.atomic():
+            locked = PasswordResetToken.objects.select_for_update().filter(pk=token.pk, is_used=False).first()
+            if locked is None:
+                return _error(
+                    "Invalid or expired code.", VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST,
+                    errors={"code": ["Invalid or expired code"]},
+                )
+            self._apply_reset(user, new_password, locked)
+
+        return Response({"detail": "Password has been reset successfully."}, status=status.HTTP_200_OK)
+
+    @staticmethod
+    def _apply_reset(user, new_password, token):
         user.set_password(new_password)
         user.force_password_change = False
         user.temporary_password_created_at = None
@@ -604,4 +633,7 @@ class PasswordResetConfirmView(APIView):
         token.used_at = timezone.now()
         token.save()
 
-        return Response({"detail": "Password has been reset successfully."}, status=status.HTTP_200_OK)
+        # Whoever held a session under the old password (possibly the reason
+        # for the reset) loses it here: every outstanding refresh token is
+        # blacklisted, so none of them can mint another access token.
+        services._revoke_refresh_tokens(user)

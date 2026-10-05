@@ -25,6 +25,7 @@ ever sees exceptions that actually propagate out of a view.
 
 import logging
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework.exceptions import (
     AuthenticationFailed,
     NotAuthenticated,
@@ -103,7 +104,28 @@ def _apply_envelope(exc: Exception, response: Response) -> None:
     }
 
 
+def _django_validation_response(exc: DjangoValidationError) -> Response:
+    """Django's ValidationError as a 400 in the standard envelope.
+
+    DRF does not handle it, so it used to fall through to the 500 branch. The
+    common source is a malformed id reaching the ORM — ``get_object_or_404(
+    ClientPortal, id="not-a-uuid")`` raises it from UUIDField.to_python — and a
+    model's clean()/full_clean() raises the same type. Both are bad input, not
+    server bugs, and 400 + ``validation_error`` matches what the views that
+    already catch it themselves return (apps/reminders, apps/document_hub).
+    """
+    if hasattr(exc, "error_dict"):
+        errors = {field: [str(m) for m in msgs] for field, msgs in exc.message_dict.items()}
+    else:
+        errors = {"non_field_errors": [str(m) for m in exc.messages]}
+    first = next((m for msgs in errors.values() for m in msgs), "Validation failed.")
+    return Response({"detail": first, "code": VALIDATION_ERROR, "errors": errors}, status=400)
+
+
 def custom_exception_handler(exc, context):
+    if isinstance(exc, DjangoValidationError):
+        return _django_validation_response(exc)
+
     response = drf_exception_handler(exc, context)
 
     if response is not None:

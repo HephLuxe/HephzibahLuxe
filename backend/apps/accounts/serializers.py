@@ -360,6 +360,13 @@ class AdminUserCreationSerializer(serializers.ModelSerializer):
         actor = getattr(self.context.get("request"), "user", None)
         if value == UserRole.DEVELOPER and not developers.is_developer(actor):
             raise serializers.ValidationError(developers.GRANT_MESSAGE)
+        # Plain staff manage clients only. Creating a staff or admin account is
+        # reserved for a superuser (admin or developer); otherwise any staff
+        # member could mint an admin and, through it, is_superuser.
+        if value in (UserRole.STAFF, UserRole.ADMIN) and not getattr(actor, "is_superuser", False):
+            raise serializers.ValidationError(
+                "Only an administrator can create staff or admin accounts."
+            )
         return value
 
     def validate_email(self, value):
