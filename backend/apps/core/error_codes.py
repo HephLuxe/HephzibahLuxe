@@ -16,6 +16,11 @@ VALIDATION_ERROR = "validation_error"
 INVALID_TRANSITION = "invalid_transition"
 CONTACTS_LOCKED = "contacts_locked"
 EVENT_DETAILS_LOCKED = "event_details_locked"
+# A client tried a structural change (add/delete a day, reorder or delete an
+# image) on an event that is live on the public portfolio. Distinct from
+# EVENT_DETAILS_LOCKED, which staff toggle per engagement; this one follows
+# Event.is_published and only staff can lift it by unpublishing.
+EVENT_PUBLISHED = "event_published"
 CONFIRMATION_REQUIRED = "confirmation_required"
 # Two DIFFERENT limiters can produce a 429 and a frontend needs to tell them
 # apart, because the remedy differs. RATE_LIMITED is a per-endpoint limit this

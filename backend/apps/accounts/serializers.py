@@ -251,6 +251,23 @@ class PasswordResetVerifySerializer(serializers.Serializer):
         data['_token'] = result
         return data
 
+def _validate_password_policy(password: str, user, field: str | None = "new_password") -> None:
+    """
+    Run settings.AUTH_PASSWORD_VALIDATORS and turn a failure into a DRF error,
+    keyed under ``field`` (for object-level validate()) or bare (for a
+    validate_<field> method, where DRF keys it itself). Every message is kept,
+    so the response lists all the rules the password missed.
+    """
+    from django.contrib.auth.password_validation import validate_password
+    from django.core.exceptions import ValidationError as DjangoValidationError
+
+    try:
+        validate_password(password, user)
+    except DjangoValidationError as e:
+        messages = list(e.messages)
+        raise serializers.ValidationError({field: messages} if field else messages)
+
+
 class PasswordResetConfirmSerializer(serializers.Serializer):
     """Validates email + code + new password + confirm password"""
     email = serializers.EmailField()
@@ -275,7 +292,8 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         return value
 
     def validate(self, data: dict) -> dict:
-        """Validate passwords match and code is valid"""
+        """Validate passwords match, code is valid, and the new password meets
+        the password policy."""
         # Check if passwords match
         if data['new_password'] != data['confirm_password']:
             raise serializers.ValidationError({
@@ -289,6 +307,13 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
         if not is_valid:
             raise serializers.ValidationError({"code": result})
+
+        # The full AUTH_PASSWORD_VALIDATORS set — this used to check nothing but
+        # min_length=8. After the code check so the account is known, which
+        # lets UserAttributeSimilarityValidator compare against its email and
+        # names. A rejected password does not mark the code used, so the user
+        # can retry with a stronger one.
+        _validate_password_policy(data['new_password'], result.user)
 
         # Store the token for use in the view
         data['_token'] = result
@@ -410,13 +435,9 @@ class ForcePasswordChangeSerializer(serializers.Serializer):
         return data
 
     def validate_new_password(self, value: str) -> str:
-        """Validate password strength using Django validators"""
-        from django.contrib.auth.password_validation import validate_password
-        from django.core.exceptions import ValidationError as DjangoValidationError
-
-        try:
-            validate_password(value)
-        except DjangoValidationError as e:
-            raise serializers.ValidationError(list(e.messages))
-
+        """Validate password strength using Django validators (the full
+        AUTH_PASSWORD_VALIDATORS set, with the user when the view passes one,
+        so UserAttributeSimilarityValidator has something to compare)."""
+        user = self.context.get("user")
+        _validate_password_policy(value, user, field=None)
         return value

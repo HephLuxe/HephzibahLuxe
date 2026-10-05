@@ -99,39 +99,45 @@ def _safe_portal_id(instance):
 
 
 # ── Event ────────────────────────────────────────────────────────
-# Keyed by the immutable event.pk, not the slug — the slug is kept only as a
-# cosmetic suffix for anyone browsing storage directly. Uniqueness/collision
-# safety comes from the pk, so the slug can change later (a rename, a future
-# feature) without ever orphaning an already-stored file path — the old
-# slug-only scheme couldn't make that guarantee (see
-# docs/FAILURE_POINTS_AUDIT.md F9 and HEPHZIBAH_LUXE_AUDIT_AND_PLAN.md §4.3).
-# No slug regeneration/reclaim logic is introduced by this change — slugs
-# still behave exactly as before; only the storage folder naming changes.
+# Keyed by the immutable event.pk alone. These three write to the PUBLIC bucket,
+# whose object keys are visible in every image URL — and Event.slug is derived
+# from the celebrant's names ("winifred-ojularis-birthday"), so embedding it put
+# the client's name into every public portfolio photo URL. The pk was already
+# what made the path unique; the slug was only a cosmetic suffix.
+#
+# Files uploaded before this change keep their old `{event_id}-{slug}` keys —
+# the stored name is in the row, so they still resolve — until the
+# `rekey_public_image_paths` management command moves them.
+# Private-bucket paths further down (contacts, budget, document hub) still carry
+# the slug: they are only ever served through short-lived signed URLs to people
+# who already know whose event it is.
 
 def event_cover_upload_path(instance, filename):
     """
     instance = Event
-    portals/{portal_id}/events/{event_id}-{event_slug}/covers/cover.{ext}
+    portals/{portal_id}/events/{event_id}/covers/cover.{ext}
+
+    Only referenced by historical migrations (the field it served is gone).
     """
     portal_id = _safe_portal_id(instance)
     event_id = instance.pk or "new"
-    slug = getattr(instance, "slug", None) or "no-slug"
     ext = os.path.splitext(filename)[1]
-    return f"portals/{portal_id}/events/{event_id}-{slug}/covers/cover{ext}"
+    return f"portals/{portal_id}/events/{event_id}/covers/cover{ext}"
 
 
 def event_image_upload_path(instance, filename):
     """
     instance = EventDay
-    portals/{portal_id}/events/{event_id}-{event_slug}/days/{day_id}/images/image.{ext}
+    portals/{portal_id}/events/{event_id}/days/{day_id}/images/image.{ext}
+
+    Only referenced by historical migrations (the field it served is gone).
     """
     portal_id = _safe_portal_id(instance)
     owner = getattr(instance, "owner", None)
     event_id = getattr(owner, "pk", None) or "new"
-    slug = getattr(owner, "slug", None) or "no-slug"
     day_id = instance.pk or "new"
     ext = os.path.splitext(filename)[1]
-    return f"portals/{portal_id}/events/{event_id}-{slug}/days/{day_id}/images/image{ext}"
+    return f"portals/{portal_id}/events/{event_id}/days/{day_id}/images/image{ext}"
 
 
 def event_gallery_upload_path(instance, filename):
@@ -139,9 +145,9 @@ def event_gallery_upload_path(instance, filename):
     instance = EventImage
 
     Event-level gallery:
-      portals/{portal_id}/events/{event_id}-{event_slug}/gallery/{image_id}/{filename}
+      portals/{portal_id}/events/{event_id}/gallery/{image_id}/{filename}
     Day-level gallery:
-      portals/{portal_id}/events/{event_id}-{event_slug}/days/{day_id}/gallery/{image_id}/{filename}
+      portals/{portal_id}/events/{event_id}/days/{day_id}/gallery/{image_id}/{filename}
 
     Two things differ from the single-image paths above, both because this field
     holds MANY rows rather than one:
@@ -159,10 +165,9 @@ def event_gallery_upload_path(instance, filename):
     portal_id = _safe_portal_id(instance)
     event = getattr(instance, "event", None)
     event_id = getattr(event, "pk", None) or "new"
-    slug = getattr(event, "slug", None) or "no-slug"
     image_id = instance.pk or "new"
 
-    base = f"portals/{portal_id}/events/{event_id}-{slug}"
+    base = f"portals/{portal_id}/events/{event_id}"
     day_id = getattr(instance, "event_day_id", None)
     if day_id:
         return f"{base}/days/{day_id}/gallery/{image_id}/{filename}"

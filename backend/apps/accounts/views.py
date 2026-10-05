@@ -293,7 +293,7 @@ class ForcePasswordChangeView(APIView):
         if not user.force_password_change:
             return _error("Password change not required.", VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST)
 
-        serializer = ForcePasswordChangeSerializer(data=request.data)
+        serializer = ForcePasswordChangeSerializer(data=request.data, context={"user": user})
         if not serializer.is_valid():
             return _error("Invalid password data.", VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST, errors=serializer.errors)
 
@@ -481,6 +481,9 @@ class PasswordResetRequestView(APIView):
 
     Body: { "email": "user@example.com" }
     """
+    # No authentication either: a stale/invalid Bearer header (the locked-out
+    # user's expired session) would otherwise be a 401 before the view runs.
+    authentication_classes = []
     permission_classes = []  # Public endpoint
 
     def post(self, request):
@@ -528,6 +531,9 @@ class PasswordResetVerifyView(APIView):
 
     Body: { "email": "user@example.com", "code": "123456" }
     """
+    # No authentication either: a stale/invalid Bearer header (the locked-out
+    # user's expired session) would otherwise be a 401 before the view runs.
+    authentication_classes = []
     permission_classes = []  # Public endpoint
 
     def post(self, request):
@@ -553,12 +559,20 @@ class PasswordResetConfirmView(APIView):
         "confirm_password": "newSecurePassword123"
     }
     """
+    # No authentication either: a stale/invalid Bearer header (the locked-out
+    # user's expired session) would otherwise be a 401 before the view runs.
+    authentication_classes = []
     permission_classes = []  # Public endpoint
 
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
         if not serializer.is_valid():
-            return _error("Invalid or expired code.", VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST, errors=serializer.errors)
+            # Name the actual problem: a policy failure on a VALID code must not
+            # read as "Invalid or expired code", or the user requests a fresh
+            # code instead of choosing a stronger password.
+            password_only = set(serializer.errors) <= {"new_password", "confirm_password"}
+            detail = "Invalid password data." if password_only else "Invalid or expired code."
+            return _error(detail, VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST, errors=serializer.errors)
 
         email = serializer.validated_data['email']
         new_password = serializer.validated_data['new_password']

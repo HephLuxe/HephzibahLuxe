@@ -28,7 +28,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env(
     DEBUG=(bool, False)
 )
-environ.Env.read_env(BASE_DIR / '.env')
+# DJANGO_ENV_FILE selects an alternate env file (relative to backend/ or
+# absolute) — e.g. DJANGO_ENV_FILE=.env.dev for a local database with no real
+# Brevo/R2/Redis. Unset, this reads backend/.env exactly as before. Variables
+# already in the process environment still win over the file either way.
+_ENV_FILE = BASE_DIR / os.environ.get('DJANGO_ENV_FILE', '.env')
+if 'DJANGO_ENV_FILE' in os.environ and not _ENV_FILE.is_file():
+    raise ImproperlyConfigured(f"DJANGO_ENV_FILE points at {_ENV_FILE}, which does not exist.")
+environ.Env.read_env(_ENV_FILE)
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
@@ -187,18 +194,21 @@ DATABASES['default']['CONN_MAX_AGE'] = 0
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
+# PasswordPolicyValidator (apps/accounts/validators.py) is the platform policy:
+# min 8 chars, not all digits, one uppercase, one special character. It replaces
+# Django's MinimumLengthValidator and NumericPasswordValidator, which check two of
+# the same rules — keeping them too would report each of those failures twice in
+# different words.
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        'NAME': 'apps.accounts.validators.PasswordPolicyValidator',
+        'OPTIONS': {'min_length': 8},
     },
 ]
 
@@ -336,6 +346,21 @@ else:
             "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
         },
     }
+
+# ── Opt-in local-disk media, for local development only ──
+# USE_LOCAL_MEDIA=True (with R2 off) swaps the in-memory default storage above
+# for FileSystemStorage under backend/media/, so uploads survive a restart and
+# config/urls.py can serve them at MEDIA_URL while DEBUG is on. Off by default,
+# never on under the test runner, and ignored whenever R2 is on — so tests and
+# every real environment are unaffected. backend/media/ is gitignored.
+USE_LOCAL_MEDIA = (
+    env.bool('USE_LOCAL_MEDIA', default=False)
+    and not USE_R2_STORAGE
+    and not ('pytest' in sys.modules or (len(sys.argv) > 1 and sys.argv[1] == 'test'))
+)
+if USE_LOCAL_MEDIA:
+    MEDIA_ROOT = BASE_DIR / 'media'
+    STORAGES["default"] = {"BACKEND": "django.core.files.storage.FileSystemStorage"}
 
 
 # Default primary key field type
@@ -998,6 +1023,10 @@ THROTTLE_RATES = {
     # frontend stuck in a retry loop trips it in about a second and recovers
     # within the minute.
     "user_burst": env("THROTTLE_USER_BURST", default="120/m"),
+    # The two anonymous portfolio reads only, per client IP, instead of
+    # `anon`. Vercel ISR revalidation arrives from shared IPs and tripped the
+    # `anon` ceiling. See apps/core/throttling.PortfolioRateThrottle.
+    "portfolio": env("THROTTLE_RATE_PORTFOLIO", default="20000/day"),
 }
 
 # Wired into DRF here rather than inside the REST_FRAMEWORK literal, because the

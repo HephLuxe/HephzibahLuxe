@@ -70,19 +70,22 @@ def cleanup_event_image(sender, instance: EventImage, **kwargs) -> None:
 # narrative, the image is the gallery.
 
 
-def _slug_of(instance) -> str | None:
-    """The event slug behind any of the three models, or None if it can't be
-    reached (a cascade may already have removed the parent)."""
+def _public_slugs_of(instance) -> tuple[str | None, ...]:
+    """The PUBLIC slug(s) the portfolio cache is keyed on, for any of the three
+    models: the event's public_slug, plus — for an Event whose public_slug was
+    just changed — the one it was loaded with, so the old URL stops serving a
+    cached page. Empty if the event can't be reached (a cascade may already
+    have removed the parent)."""
     try:
         if isinstance(instance, Event):
-            return instance.slug
+            return (instance.public_slug, getattr(instance, "_loaded_public_slug", None))
         if isinstance(instance, EventDay):
-            return instance.owner.slug
+            return (instance.owner.public_slug,)
         if isinstance(instance, EventImage):
-            return instance.event.slug
+            return (instance.event.public_slug,)
     except (AttributeError, Event.DoesNotExist, EventDay.DoesNotExist):
-        return None
-    return None
+        return ()
+    return ()
 
 
 @receiver(post_save, sender=Event)
@@ -97,5 +100,5 @@ def invalidate_portfolio(sender, instance, **kwargs) -> None:
     # on_commit so a rolled-back transaction doesn't evict a still-correct
     # entry, and so the next reader repopulates from committed state rather than
     # racing the write it was triggered by.
-    slug = _slug_of(instance)
-    transaction.on_commit(lambda: invalidate_portfolio_cache(slug))
+    slugs = _public_slugs_of(instance)
+    transaction.on_commit(lambda: invalidate_portfolio_cache(*slugs))

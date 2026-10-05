@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from apps.core.error_codes import (
     CONFIRMATION_REQUIRED,
     EVENT_DETAILS_LOCKED,
+    EVENT_PUBLISHED,
     NOT_FOUND,
     VALIDATION_ERROR,
 )
@@ -93,6 +94,23 @@ def _locked_error() -> Response:
     return _error(
         "Event details are locked. Please contact your planning team to make changes.",
         EVENT_DETAILS_LOCKED,
+        status.HTTP_403_FORBIDDEN,
+    )
+
+
+def _published_lock_applies(user, event: Event) -> bool:
+    """
+    True when a client must not make structural changes to `event` because it
+    is live on the public portfolio. Field-level edits are handled separately,
+    by the serializers' `published_locked_fields` (ignored, not refused).
+    """
+    return event.is_published and not is_staff_or_superuser(user)
+
+
+def _published_error() -> Response:
+    return _error(
+        "This event is live on the public portfolio. Contact the Hephzibah Luxe team to change it.",
+        EVENT_PUBLISHED,
         status.HTTP_403_FORBIDDEN,
     )
 
@@ -378,7 +396,10 @@ def create_eventday(request, event_slug):
 
     enforce(can_access_event(request.user, event))
 
-    serializer = EventDaySerializer(data=request.data, context={"request": request})
+    if _published_lock_applies(request.user, event):
+        return _published_error()
+
+    serializer = EventDaySerializer(data=request.data, context={"request": request, "event": event})
     if not serializer.is_valid():
         return _error("Invalid event day data.", VALIDATION_ERROR, status.HTTP_400_BAD_REQUEST, errors=serializer.errors)
 
@@ -617,6 +638,12 @@ def event_gallery(request, event_slug):
             )
         serializers_.append(serializer)
 
+    # A client's upload starts OFF the public portfolio: their event may
+    # already be published, and the model default (True) exists for staff
+    # curating a gallery, not for anything a client sends. Staff keep the
+    # default.
+    publish_flag = {} if is_staff_or_superuser(request.user) else {"is_published": False}
+
     created = []
     with transaction.atomic():
         for serializer in serializers_:
@@ -624,6 +651,7 @@ def event_gallery(request, event_slug):
                 serializer, request.user,
                 event=event, event_day=event_day,
                 sort_order=services.next_sort_order(event, event_day),
+                **publish_flag,
             ))
         services.ensure_gallery_has_a_cover(event, event_day)
 
@@ -647,7 +675,8 @@ def _gallery_change_description(event_day) -> str:
 @permission_classes([IsAuthenticated])
 def event_gallery_image(request, event_slug, image_id):
     """
-    PATCH  — edit one image: `alt_text`, `sort_order`, or `is_primary: true` to
+    PATCH  — edit one image: `alt_text`, `sort_order`, `is_published` (staff
+             only; ignored for clients), or `is_primary: true` to
              make it the gallery cover. Promotion goes through
              services.set_primary_image so the previous cover is demoted in the
              same transaction; setting the flag directly would trip the partial
@@ -659,6 +688,10 @@ def event_gallery_image(request, event_slug, image_id):
     Unlike delete_eventday, a client may delete their own images when the event
     is unlocked — a photograph is content they supplied, not scheduling data,
     and the event day it hangs off survives.
+
+    Once the event is published, a client's DELETE is a 403 (event_published),
+    and their `alt_text` / `sort_order` / `is_primary` are ignored: those
+    change the live public page.
     """
     try:
         event = Event.objects.get(slug=event_slug)
@@ -679,12 +712,16 @@ def event_gallery_image(request, event_slug, image_id):
     event_day = image.event_day
 
     if request.method == 'DELETE':
+        if _published_lock_applies(request.user, event):
+            return _published_error()
         image.delete()
         services.ensure_gallery_has_a_cover(event, event_day)
         services.schedule_event_details_notification(event, _gallery_change_description(event_day))
         return Response({"detail": "Image deleted successfully."}, status=status.HTTP_200_OK)
 
-    data = {k: v for k, v in request.data.items() if k in ("alt_text", "sort_order")}
+    # is_published is staff-only: EventImageSerializer makes it read-only for
+    # anyone else, so a client's value is dropped there.
+    data = {k: v for k, v in request.data.items() if k in ("alt_text", "sort_order", "is_published")}
     serializer = EventImageSerializer(
         image, data=data, partial=True, context={"request": request},
     )
@@ -694,8 +731,13 @@ def event_gallery_image(request, event_slug, image_id):
     save_with_attribution(serializer, request.user)
 
     # is_primary is handled apart from the serializer because promotion is a
-    # two-row operation, not a field assignment.
-    if str(request.data.get("is_primary", "")).lower() in ("true", "1"):
+    # two-row operation, not a field assignment. Like the serializer's
+    # published_locked_fields, a client's value is ignored on a published event:
+    # the primary image is the cover on the public page.
+    if (
+        str(request.data.get("is_primary", "")).lower() in ("true", "1")
+        and not _published_lock_applies(request.user, event)
+    ):
         services.set_primary_image(image)
         image.refresh_from_db()
 
@@ -729,6 +771,9 @@ def reorder_event_gallery(request, event_slug):
 
     if not is_staff_or_superuser(request.user) and _event_details_locked_for_event(event):
         return _locked_error()
+
+    if _published_lock_applies(request.user, event):
+        return _published_error()
 
     event_day, error = _resolve_gallery_scope(event, request.data.get("event_day"))
     if error:

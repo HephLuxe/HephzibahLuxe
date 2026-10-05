@@ -7,6 +7,8 @@ never mutate v1 in place. The Django admin lives outside the API prefix.
 
 Canonical, human-readable route list: docs/API_CONTRACT.md.
 """
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
@@ -56,6 +58,9 @@ urlpatterns = [
     path('api/v1/', include(api_v1_patterns)),
 ]
 
-# No local-disk media route: media is served from R2 (signed/public URLs) in
-# every real environment, and from in-memory storage under tests — never off the
-# filesystem, so there's nothing for Django to serve at MEDIA_URL.
+# Media is served from R2 (signed/public URLs) in every real environment, and
+# from in-memory storage under tests. The one exception is opt-in local dev
+# (USE_LOCAL_MEDIA=True, which settings only honours with R2 off): files live
+# under MEDIA_ROOT and are served here, and only while DEBUG is on.
+if settings.DEBUG and getattr(settings, 'USE_LOCAL_MEDIA', False):
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

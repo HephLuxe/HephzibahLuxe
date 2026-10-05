@@ -1,13 +1,57 @@
+import re
 import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.db import models
 from django.utils.text import slugify
 
 from apps.core.models import AttributedModel
 from apps.core.storages import select_public_media_storage
 from apps.core.utils import event_gallery_upload_path
+
+# Public URL slugs are lowercase-only. Django's stock validate_slug accepts
+# uppercase, and a mixed-case slug typed into the admin would be a second URL for
+# a page the frontend links in lowercase.
+lowercase_slug_validator = RegexValidator(
+    r"^[a-z0-9]+(?:-[a-z0-9]+)*$",
+    "Use lowercase letters, numbers and single hyphens only (e.g. 'golden-50th').",
+    code="invalid_slug",
+)
+
+PUBLIC_SLUG_MAX_LENGTH = 100
+
+
+def unique_slug(base: str, queryset, field: str, max_length: int = PUBLIC_SLUG_MAX_LENGTH) -> str | None:
+    """
+    ``base``, or ``base-2``, ``base-3``, ... — the first one not already used by
+    ``queryset`` in ``field``. One query, whatever the number of collisions:
+    every taken value that could clash shares the base as a prefix, so they are
+    fetched together and the gap is found in Python. Returns None for an empty
+    base (nothing slugifiable to build from).
+    """
+    # slugify() keeps underscores but lowercase_slug_validator rejects them, so
+    # a headline like "Ade_Bola" would yield a slug that fails full_clean() on
+    # the next admin save. Underscores become hyphens, and a run of mixed
+    # separators ("a _ b" -> "a-_-b") collapses to one.
+    base = re.sub(r"[-_]+", "-", base)
+    # Leave room for a "-NN" suffix so a long headline can still be made unique
+    # without exceeding the column.
+    base = base[: max_length - 4].strip("-")
+    if not base:
+        return None
+    taken = set(
+        queryset.filter(
+            models.Q(**{field: base}) | models.Q(**{f"{field}__startswith": f"{base}-"})
+        ).values_list(field, flat=True)
+    )
+    if base not in taken:
+        return base
+    n = 2
+    while f"{base}-{n}" in taken:
+        n += 1
+    return f"{base}-{n}"
 
 
 class VenueBookingStatus(models.TextChoices):
@@ -69,6 +113,22 @@ class Event(AttributedModel):
             "also exposes every event day and gallery image beneath it."
         ),
     )
+    # The PUBLIC address of this event (/portfolio/<public_slug>). Separate from
+    # `slug` because `slug` is derived from `title`, which is derived from the
+    # celebrant's names — publishing it would publish who the client is — and
+    # because `slug` keys the portal URLs and must never change. Generated from
+    # `headline` (never from title/celebrant) the first time an event is saved
+    # with one, then left alone so a shared link keeps working after a headline
+    # edit.
+    public_slug = models.SlugField(
+        max_length=PUBLIC_SLUG_MAX_LENGTH, unique=True, null=True, blank=True,
+        validators=[lowercase_slug_validator],
+        help_text=(
+            "Public URL of this event: /portfolio/<public slug>. Leave blank to generate "
+            "it from the headline on save. Lowercase letters, numbers and hyphens. "
+            "Changing it breaks any link already shared."
+        ),
+    )
     
     groom_name = models.CharField(max_length=255, blank = True, null=True)
     bride_name = models.CharField(max_length=255, blank = True, null=True)
@@ -102,7 +162,28 @@ class Event(AttributedModel):
                 num += 1
             self.slug = slug
 
+        # An empty string would collide with every other blank one on the
+        # unique index; blank means NULL.
+        if not self.public_slug:
+            self.public_slug = None
+            if (self.headline or "").strip():
+                self.public_slug = unique_slug(
+                    slugify(self.headline),
+                    Event.objects.exclude(pk=self.pk),
+                    "public_slug",
+                )
+                _add_update_field(kwargs, "public_slug")
+
         super().save(*args, **kwargs)
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        # Remember the public slug as loaded, so the cache invalidation in
+        # signals.py can also drop the entry cached under the OLD slug when
+        # staff rename it.
+        instance = super().from_db(db, field_names, values)
+        instance._loaded_public_slug = instance.__dict__.get("public_slug")
+        return instance
 
     def get_portal_id(self):
         try:
@@ -187,6 +268,17 @@ class EventDay(AttributedModel):
     dress_code = models.CharField(max_length=255, blank=True)
     estimated_guest_count = models.PositiveIntegerField(null=True, blank=True)
 
+    # Public address of this day under its event:
+    # /portfolio/<event public_slug>/<slug>. Unique within the event only.
+    slug = models.SlugField(
+        max_length=PUBLIC_SLUG_MAX_LENGTH, null=True, blank=True,
+        validators=[lowercase_slug_validator],
+        help_text=(
+            "Public URL segment for this day, unique within its event. Leave blank to "
+            "generate it from the label (or headline) on save."
+        ),
+    )
+
     # created_by / last_updated_by come from AttributedModel (apps/core/models.py).
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -195,9 +287,29 @@ class EventDay(AttributedModel):
     class Meta:
         ordering = ['date', 'start_time']
         verbose_name_plural = "Event Days"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "slug"],
+                condition=models.Q(slug__isnull=False),
+                name="unique_event_day_slug_per_event",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.owner.title} - {self.date}"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = None
+            source = (self.event_day_title or "").strip() or (self.headline or "").strip()
+            if source and self.owner_id:
+                self.slug = unique_slug(
+                    slugify(source),
+                    EventDay.objects.filter(owner_id=self.owner_id).exclude(pk=self.pk),
+                    "slug",
+                )
+                _add_update_field(kwargs, "slug")
+        super().save(*args, **kwargs)
 
     def get_portal_id(self):
         try:
@@ -237,6 +349,13 @@ class EventDay(AttributedModel):
         except ValueError:
             return None
 
+def _add_update_field(save_kwargs: dict, name: str) -> None:
+    """A slug generated inside save() must be written even by a caller that
+    passed update_fields naming only the fields it changed."""
+    if save_kwargs.get("update_fields") is not None:
+        save_kwargs["update_fields"] = {*save_kwargs["update_fields"], name}
+
+
 class EventImage(AttributedModel):
     """
     One photograph in a gallery. The same row type serves both levels, told apart
@@ -250,7 +369,7 @@ class EventImage(AttributedModel):
         day's card in the event overview.
 
     One model rather than an EventImage/EventDayImage pair: the upload path needs
-    the event either way (paths are keyed on `{event_id}-{slug}`), so a separate
+    the event either way (paths are keyed on `{event_id}`), so a separate
     day model would carry a redundant FK up to the event or re-walk `owner` on
     every path build. One model also means one serializer, one set of endpoints
     and one blob-cleanup receiver instead of two near-identical copies. The cost
@@ -272,7 +391,7 @@ class EventImage(AttributedModel):
         help_text="Set for a day gallery image; leave empty for an event-level image.",
     )
     # max_length=500 for the same reason the retired single-image fields needed
-    # it — the path is portal UUID + event id + slug + day id + image id +
+    # it — the path is portal UUID + event id + day id + image id +
     # the original filename, well past ImageField's 100-char default.
     image = models.ImageField(
         upload_to=event_gallery_upload_path, storage=select_public_media_storage, max_length=500,

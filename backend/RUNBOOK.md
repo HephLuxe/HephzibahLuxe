@@ -28,6 +28,58 @@ whenever `DEBUG=False`.
 read**. Leaving them set in an old `.env` is harmless (nothing looks at them), but
 delete them so nobody assumes a broker exists.
 
+## Local development
+
+`backend/.env` holds real deployment credentials. For local work, point settings
+at a separate file with `DJANGO_ENV_FILE` (relative to `backend/` or absolute);
+unset, settings read `backend/.env` exactly as before. Process environment
+variables still win over either file.
+
+```bash
+# One-time (macOS / Homebrew; Python 3.12 per .python-version)
+brew install python@3.12 postgresql@18
+brew services start postgresql@18
+createdb hephluxe_dev
+python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+cp .env.dev.example .env.dev            # gitignored; set your own DJANGO_SECRET_KEY
+
+# Every session
+export DJANGO_ENV_FILE=.env.dev
+.venv/bin/python manage.py migrate
+.venv/bin/python manage.py runserver    # http://localhost:8000/ (health: /health/)
+```
+
+`.env.dev` runs with DEBUG=True, a local Postgres, LocMem cache, no Sentry/Loki,
+and `USE_R2_STORAGE=False` + `USE_LOCAL_MEDIA=True`: uploads go to
+`backend/media/` (gitignored) and runserver serves them at `/media/`. The Brevo
+key is a placeholder, so sends are attempted and fail with a 401 that is caught
+and recorded on the Notification row — the request that triggered them still
+succeeds (an inquiry POST still returns 201).
+
+Seed the public portfolio with the events that used to be static in the
+frontend (dry run first; `--commit` writes rows and copies images into
+`backend/media/`; re-running skips slugs that already exist):
+
+```bash
+.venv/bin/python manage.py import_static_portfolio
+.venv/bin/python manage.py import_static_portfolio --commit
+curl http://localhost:8000/api/v1/portfolio/events/
+```
+
+The manifest it reads, `apps/events/fixtures/static_portfolio.json`, is generated
+from `frontend/data/portfolio.ts` — regenerate it rather than editing it by hand:
+
+```bash
+# from the repo root (Node 22.6+)
+node --experimental-strip-types --no-warnings -e 'import("./frontend/data/portfolio.ts").then(m => process.stdout.write(JSON.stringify(m.portfolioEvents, null, 2) + "\n"))' > backend/apps/events/fixtures/static_portfolio.json
+```
+
+Tests: never run `pytest` without `DJANGO_ENV_FILE` (or an exported env) that
+points at a local database — the default `backend/.env` would aim the test
+database at the real `DATABASE_URL`. Use a copy of `.env.dev` with `DEBUG=False`,
+`CACHE_REDIS_URL=redis://localhost:6379/1` (not contacted under tests) and a
+different database name, or the CI values in `.github/workflows/backend-ci.yml`.
+
 ## Fresh database / new environment
 
 After pointing `DATABASE_URL` at a new/empty database (make sure the rest of

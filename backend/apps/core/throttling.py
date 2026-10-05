@@ -153,3 +153,26 @@ class UserBurstRateThrottle(NearLimitLoggingMixin, UserRateThrottle):
         # requests, and correct if that ever changes. It also means no throttle
         # in this project consults DRF's NUM_PROXIES setting on any path.
         return bucket_ip(request)
+
+
+class PortfolioRateThrottle(NearLimitLoggingMixin, AnonRateThrottle):
+    """
+    The anonymous portfolio reads (apps/events/public_views.py), on their own
+    per-IP bucket instead of the shared ``anon`` one.
+
+    Scope ``portfolio``. The frontend's ISR revalidation fetches these pages
+    from Vercel's shared egress IPs, so one "client" here is a fleet of build
+    and revalidation workers, and at the ``anon`` ceiling they got 429s that
+    surfaced as a broken portfolio. These views are cached GETs that expose
+    only published data, so a much higher ceiling costs little; drawing from a
+    separate bucket also means portfolio traffic can't use up the allowance
+    that guards login and password reset from the same IP.
+
+    Same identity as ``ClientIPAnonRateThrottle`` (the project's client-IP
+    resolver), so the bucket can't be dodged with a forged X-Forwarded-For.
+    """
+
+    scope = "portfolio"
+
+    def get_ident(self, request):
+        return bucket_ip(request)

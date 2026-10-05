@@ -910,6 +910,23 @@ class EventImageStoragePathTests(TestCase):
         self.assertIn("/gallery/", path)
         self.assertNotIn("/days/", path)
 
+    def test_the_public_path_carries_no_slug(self):
+        """These blobs are on the PUBLIC bucket and the key is in every image
+        URL; Event.slug is derived from the client's names, so it must not be
+        in it. Keyed by event pk alone."""
+        portal = self.client_user.portal.pk
+        event_image = EventImage(event=self.event)
+        day_image = EventImage(event=self.event, event_day=self.day)
+        self.assertEqual(
+            event_gallery_upload_path(event_image, "photo.png"),
+            f"portals/{portal}/events/{self.event.pk}/gallery/{event_image.pk}/photo.png",
+        )
+        self.assertEqual(
+            event_gallery_upload_path(day_image, "photo.png"),
+            f"portals/{portal}/events/{self.event.pk}/days/{self.day.pk}/gallery/{day_image.pk}/photo.png",
+        )
+        self.assertNotIn(self.event.slug, event_gallery_upload_path(day_image, "photo.png"))
+
 
 @override_settings(USE_R2_STORAGE=False)
 class EventImageBlobCleanupTests(TestCase):
@@ -1046,6 +1063,10 @@ class PublicPortfolioTests(TestCase):
         self.published.save()
 
         self.private = _make_event(self.client_user, title="Private Wedding")
+        # A headline gives it a public_slug, so the 404 below is the publish
+        # gate working, not merely an unknown slug.
+        self.private.headline = "A Private Story"
+        self.private.save()
 
         self.day = EventDay.objects.create(
             owner=self.published, event_day_title="Event No. 1",
@@ -1069,17 +1090,18 @@ class PublicPortfolioTests(TestCase):
         """The whole point: no Authorization header."""
         resp = self._list()
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual([e["slug"] for e in resp.data], [self.published.slug])
+        self.assertEqual([e["slug"] for e in resp.data], [self.published.public_slug])
 
     def test_an_unpublished_event_is_absent_from_the_index(self):
         self.assertNotIn(
-            self.private.slug, [e["slug"] for e in self._list().data],
+            self.private.public_slug, [e["slug"] for e in self._list().data],
         )
 
     def test_an_unpublished_event_is_a_404_not_a_403(self):
         """A 403 would confirm the event exists, which is itself a fact about a
         private client engagement."""
-        resp = self._detail(self.private.slug)
+        self.assertIsNotNone(self.private.public_slug)
+        resp = self._detail(self.private.public_slug)
         self.assertEqual(resp.status_code, 404)
 
     def test_publishing_is_opt_in(self):
@@ -1094,7 +1116,7 @@ class PublicPortfolioTests(TestCase):
             self.assertNotIn(leaked, tile, f"{leaked} must not be public")
 
     def test_the_detail_never_exposes_planning_data(self):
-        day = self._detail(self.published.slug).data["event_days"][0]
+        day = self._detail(self.published.public_slug).data["event_days"][0]
         for leaked in ("venue", "venue_address", "dress_code",
                        "estimated_guest_count", "venue_booking_status",
                        "start_time", "end_time", "id", "created_by_display"):
@@ -1111,15 +1133,15 @@ class PublicPortfolioTests(TestCase):
             sorted(self._list().data[0]),
             ["country", "cover_image", "event_type", "headline", "slug", "state", "year"],
         )
-        detail = self._detail(self.published.slug).data
+        detail = self._detail(self.published.public_slug).data
         self.assertEqual(
             sorted(detail),
             ["country", "cover_image", "description", "event_days", "event_type",
-             "headline", "slug", "state", "year"],
+             "headline", "images", "slug", "state", "year"],
         )
         self.assertEqual(
             sorted(detail["event_days"][0]),
-            ["content", "date", "event_day_title", "headline", "images"],
+            ["content", "date", "event_day_title", "headline", "images", "slug"],
         )
 
     def test_only_the_year_is_published_not_the_full_date(self):
@@ -1143,14 +1165,75 @@ class PublicPortfolioTests(TestCase):
         )
         cache.clear()
 
-        detail = self._detail(self.published.slug).data
+        detail = self._detail(self.published.public_slug).data
         self.assertNotIn("/api/v1/files/", detail["cover_image"]["image"])
         self.assertEqual(detail["cover_image"]["alt_text"], "Cover")
         self.assertEqual(len(detail["event_days"][0]["images"]), 1)
 
     def test_an_event_with_no_images_serializes_without_error(self):
-        detail = self._detail(self.published.slug).data
+        detail = self._detail(self.published.public_slug).data
         self.assertIsNone(detail["cover_image"])
+
+    def test_the_event_level_gallery_is_public_minus_the_cover(self):
+        """
+        A single-day event keeps its photographs at event level (no day to hang
+        them on), so the detail exposes them as `images`: published only, in
+        gallery order, and without the cover, which already has its own key.
+        Day images stay under their day.
+        """
+        EventImage.objects.create(
+            event=self.published, image="g/cover.jpg", alt_text="cover", is_primary=True,
+        )
+        EventImage.objects.create(event=self.published, image="g/b.jpg", alt_text="b", sort_order=2)
+        EventImage.objects.create(event=self.published, image="g/a.jpg", alt_text="a", sort_order=1)
+        EventImage.objects.create(
+            event=self.published, image="g/hidden.jpg", alt_text="hidden",
+            sort_order=3, is_published=False,
+        )
+        EventImage.objects.create(
+            event=self.published, event_day=self.day, image="g/day.jpg", alt_text="day",
+        )
+        cache.clear()
+
+        detail = self._detail(self.published.public_slug).data
+        self.assertEqual([i["alt_text"] for i in detail["images"]], ["a", "b"])
+        self.assertEqual(sorted(detail["images"][0]), ["alt_text", "image", "sort_order"])
+        self.assertEqual(detail["cover_image"]["alt_text"], "cover")
+        self.assertEqual([i["alt_text"] for i in detail["event_days"][0]["images"]], ["day"])
+
+    def test_an_event_with_no_gallery_has_an_empty_images_list(self):
+        self.assertEqual(self._detail(self.published.public_slug).data["images"], [])
+
+    # ── authentication ───────────────────────────────────────────────────────
+
+    def test_a_stale_bearer_token_is_ignored_not_a_401(self):
+        """A visitor whose portal session expired still sends the old token. A
+        public page must not authenticate at all, or JWTAuthentication rejects
+        the header and the portfolio 401s."""
+        stale = {"HTTP_AUTHORIZATION": "Bearer not-a-real-token"}
+        listing = public_views.portfolio_events(factory.get("/", **stale))
+        detail = public_views.portfolio_event_detail(
+            factory.get("/", **stale), slug=self.published.public_slug,
+        )
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(detail.status_code, 200)
+
+    # ── query counts ─────────────────────────────────────────────────────────
+
+    def test_the_index_does_not_load_days(self):
+        """The tile renders only the event-level cover, so the index costs the
+        events plus one gallery prefetch — never the days or their images."""
+        cache.clear()
+        with self.assertNumQueries(2):
+            self._list()
+
+    def test_the_detail_query_count_does_not_grow_with_days(self):
+        EventDay.objects.create(owner=self.published, date=datetime.date(2027, 6, 2))
+        EventImage.objects.create(event=self.published, event_day=self.day, image="g/d.jpg")
+        cache.clear()
+        # event, its images, its days, the days' images.
+        with self.assertNumQueries(4):
+            self._detail(self.published.public_slug)
 
     # ── caching ──────────────────────────────────────────────────────────────
 
@@ -1166,14 +1249,14 @@ class PublicPortfolioTests(TestCase):
         self.assertEqual(len(self._list().data), 0)
 
     def test_a_new_gallery_image_appears_without_waiting_for_the_ttl(self):
-        self._detail(self.published.slug)  # prime the cache
+        self._detail(self.published.public_slug)  # prime the cache
 
         with self.captureOnCommitCallbacks(execute=True):
             EventImage.objects.create(
                 event=self.published, event_day=self.day, image="gallery/c/new.jpg",
             )
 
-        self.assertEqual(len(self._detail(self.published.slug).data["event_days"][0]["images"]), 1)
+        self.assertEqual(len(self._detail(self.published.public_slug).data["event_days"][0]["images"]), 1)
 
 
 @override_settings(USE_R2_STORAGE=False)
@@ -1204,7 +1287,7 @@ class PerImagePublishTests(TestCase):
 
     def _detail(self):
         return public_views.portfolio_event_detail(
-            factory.get("/"), slug=self.event.slug,
+            factory.get("/"), slug=self.event.public_slug,
         ).data
 
     def _list(self):
@@ -1274,7 +1357,7 @@ class PerImagePublishTests(TestCase):
         EventImage.objects.create(event=self.event, image="g/a.jpg")
         cache.clear()
 
-        resp = public_views.portfolio_event_detail(factory.get("/"), slug=self.event.slug)
+        resp = public_views.portfolio_event_detail(factory.get("/"), slug=self.event.public_slug)
         self.assertEqual(resp.status_code, 404)
 
     def test_toggling_an_image_takes_effect_without_waiting_for_the_ttl(self):

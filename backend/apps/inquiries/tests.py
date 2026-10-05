@@ -168,6 +168,17 @@ class SubmitInquiryTests(InquiryAPITestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(InquiryForm.objects.get().status, InquiryForm.Status.NEW)
 
+    def test_a_stale_bearer_token_does_not_turn_a_submission_into_a_401(self):
+        """A visitor whose portal session expired still sends the old token from
+        the browser. The endpoint is public, so it must not authenticate at all
+        — otherwise JWTAuthentication rejects the header and the lead is lost
+        to a 401 before the view runs."""
+        self.client.credentials(HTTP_AUTHORIZATION="Bearer not-a-real-token")
+        response = self.client.post(SUBMIT_URL, payload(), format="json")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(InquiryForm.objects.count(), 1)
+
 
 class InquiryDedupeWindowTests(InquiryAPITestCase):
     """

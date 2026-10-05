@@ -72,6 +72,10 @@ def select_public_media_storage():
     without R2 credentials.
     """
     if not getattr(settings, "USE_R2_STORAGE", False):
+        # Opt-in local dev only (settings.USE_LOCAL_MEDIA): the default storage
+        # is then FileSystemStorage under MEDIA_ROOT, served at MEDIA_URL.
+        if getattr(settings, "USE_LOCAL_MEDIA", False):
+            return default_storage
         return InMemoryStorage()
     if _public_media_configured():
         return PublicMediaStorage()

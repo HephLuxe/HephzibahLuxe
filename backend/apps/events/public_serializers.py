@@ -64,7 +64,7 @@ class PublicEventDaySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EventDay
-        fields = ["event_day_title", "headline", "content", "date", "images"]
+        fields = ["slug", "event_day_title", "headline", "content", "date", "images"]
 
     def get_images(self, obj: EventDay):
         # Filtered in Python over obj.images.all(), not with a .filter() query:
@@ -87,6 +87,10 @@ class PublicEventListSerializer(serializers.ModelSerializer):
     line written for public consumption, and it is the one the page shows.
     """
 
+    # The key stays `slug` (the frontend's route param), but the value is
+    # `public_slug`. Event.slug is derived from the celebrant's names and keys
+    # the authenticated portal URLs; it never appears on this API.
+    slug = serializers.CharField(source="public_slug", read_only=True)
     cover_image = serializers.SerializerMethodField()
     year = serializers.SerializerMethodField()
 
@@ -123,12 +127,32 @@ class PublicEventListSerializer(serializers.ModelSerializer):
 
 
 class PublicEventDetailSerializer(PublicEventListSerializer):
-    """The index tile plus the narrative and the days."""
+    """The index tile plus the narrative, the event-level gallery and the days."""
 
+    images = serializers.SerializerMethodField()
     event_days = serializers.SerializerMethodField()
 
     class Meta(PublicEventListSerializer.Meta):
-        fields = [*PublicEventListSerializer.Meta.fields, "description", "event_days"]
+        fields = [*PublicEventListSerializer.Meta.fields, "description", "images", "event_days"]
+
+    def get_images(self, obj: Event):
+        """
+        The event-level gallery (images with no day): published only, in
+        gallery order, minus the one already returned as `cover_image` so the
+        page does not show the cover twice. A single-day event has no days to
+        hang photographs on, so this is where its gallery lives.
+
+        Filtered in Python over the prefetched ``obj.images.all()`` for the same
+        reason as the day gallery — no per-request extra query.
+        """
+        candidates = [
+            i for i in obj.images.all()
+            if i.event_day_id is None and i.is_published
+        ]
+        cover = next((i for i in candidates if i.is_primary), candidates[0] if candidates else None)
+        return PublicEventImageSerializer(
+            [i for i in candidates if i is not cover], many=True, context=self.context,
+        ).data
 
     def get_event_days(self, obj: Event):
         return PublicEventDaySerializer(

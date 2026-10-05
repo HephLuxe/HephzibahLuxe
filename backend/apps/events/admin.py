@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.db import transaction
 from django.utils.html import format_html
 
 from apps.core.admin import ATTRIBUTION_FIELDS, ATTRIBUTION_FIELDSET, AttributionAdminMixin
@@ -7,10 +8,30 @@ from .models import Event, EventDay, EventImage
 from .services import get_event_deletion_impact
 
 
+def _public_slugs(queryset, path: str) -> list[str]:
+    """The public slugs a bulk action is about to affect. Read BEFORE the
+    update so the set is the rows actually selected."""
+    return list(queryset.exclude(**{f"{path}__isnull": True}).values_list(path, flat=True).distinct())
+
+
+def _invalidate_after_bulk_update(slugs: list[str]) -> None:
+    """
+    queryset.update() bypasses save(), so the post_save receivers that clear the
+    portfolio cache (signals.py) never fire. Clear by hand, with the same helper
+    and the same on_commit timing the signals use: the index key AND the detail
+    key of every affected event. Clearing only the index left each detail page
+    cached for up to PORTFOLIO_CACHE_SECONDS — for an unpublish, an event the
+    site still served after staff had taken it down.
+    """
+    from .public_views import invalidate_portfolio_cache
+
+    transaction.on_commit(lambda: invalidate_portfolio_cache(*slugs))
+
+
 class EventDayInline(admin.TabularInline):
     model = EventDay
     extra = 1
-    fields = ('id', 'date', 'event_day_title', 'headline', 'start_time', 'end_time', 'venue', 'content')
+    fields = ('id', 'date', 'event_day_title', 'headline', 'slug', 'start_time', 'end_time', 'venue', 'content')
     readonly_fields = ('id',)
 
 
@@ -49,7 +70,7 @@ class EventDayImageInline(EventImageInline):
 class EventAdmin(AttributionAdminMixin, admin.ModelAdmin):
     # Fields to display in the admin list view
     list_display = (
-        'title', 'headline', 'is_published', 'celebrant', 'event_date', 'event_type',
+        'title', 'headline', 'is_published', 'public_slug', 'celebrant', 'event_date', 'event_type',
         'country', 'state', 'slug',
         'created_at', 'created_by_display', 'updated_at', 'last_updated_by_display',
     )
@@ -63,7 +84,7 @@ class EventAdmin(AttributionAdminMixin, admin.ModelAdmin):
     list_editable = ('is_published',)
 
     # Fields to search by
-    search_fields = ('title', 'headline', 'slug', 'celebrant__email', 'celebrant__first_name', 'celebrant__last_name')
+    search_fields = ('title', 'headline', 'slug', 'public_slug', 'celebrant__email', 'celebrant__first_name', 'celebrant__last_name')
 
     raw_id_fields = ('celebrant',)
 
@@ -79,10 +100,12 @@ class EventAdmin(AttributionAdminMixin, admin.ModelAdmin):
             'fields': ('title', 'slug', 'celebrant', 'event_type', 'event_venue')
         }),
         ('Editorial', {
-            'fields': ('headline', 'description', 'is_published'),
+            'fields': ('headline', 'public_slug', 'description', 'is_published'),
             'description': (
                 'Public-page copy. `headline` is the editorial line; `title` above is generated '
-                'from the celebrant names and drives the portal. Ticking `is_published` puts this '
+                'from the celebrant names and drives the portal. `public slug` is the address on '
+                'the public site (/portfolio/&lt;public slug&gt;) — generated from the headline if '
+                'left blank; `slug` above is internal and never public. Ticking `is_published` puts this '
                 'event on the public portfolio along with EVERY event day and gallery image '
                 'beneath it — check those first.'
             ),
@@ -110,20 +133,29 @@ class EventAdmin(AttributionAdminMixin, admin.ModelAdmin):
 
     @admin.action(description="Publish to the public portfolio")
     def publish_events(self, request, queryset):
+        # The public API addresses events by public_slug only; one without it
+        # is published but unreachable, so say so instead of letting staff
+        # look for it on the site.
+        unaddressable = list(
+            queryset.filter(public_slug__isnull=True).values_list("title", flat=True)
+        )
+        slugs = _public_slugs(queryset, "public_slug")
         count = queryset.update(is_published=True)
-        # queryset.update() bypasses save(), so the post_save receiver that
-        # clears the portfolio cache never fires. Clear it by hand or the change
-        # is invisible for up to PORTFOLIO_CACHE_SECONDS and staff reasonably
-        # conclude the action did nothing.
-        from .public_views import invalidate_portfolio_cache
-        invalidate_portfolio_cache()
+        _invalidate_after_bulk_update(slugs)
         self.message_user(request, f"{count} event(s) published to the public portfolio.")
+        if unaddressable:
+            self.message_user(
+                request,
+                "No public slug, so NOT visible on the site until one is set (or a headline "
+                "is added and the event saved): " + ", ".join(unaddressable),
+                level="warning",
+            )
 
     @admin.action(description="Remove from the public portfolio")
     def unpublish_events(self, request, queryset):
+        slugs = _public_slugs(queryset, "public_slug")
         count = queryset.update(is_published=False)
-        from .public_views import invalidate_portfolio_cache
-        invalidate_portfolio_cache()
+        _invalidate_after_bulk_update(slugs)
         self.message_user(request, f"{count} event(s) removed from the public portfolio.")
 
     @admin.action(description="Show what would cascade-delete (dry run)")
@@ -166,8 +198,8 @@ class EventDayAdmin(AttributionAdminMixin, admin.ModelAdmin):
             'fields': ('id', 'owner', 'event_day_title', 'date')
         }),
         ('Editorial', {
-            'fields': ('headline', 'content'),
-            'description': 'Public-page copy: `event_day_title` above is the eyebrow, `headline` the title, `content` the narrative paragraphs.',
+            'fields': ('headline', 'slug', 'content'),
+            'description': 'Public-page copy: `event_day_title` above is the eyebrow, `headline` the title, `content` the narrative paragraphs. `slug` is this day\'s public URL segment (unique within the event; generated from the eyebrow or headline if left blank).',
         }),
         ('Timing', {
             'fields': ('start_time', 'end_time')
@@ -222,13 +254,9 @@ class EventImageAdmin(AttributionAdminMixin, admin.ModelAdmin):
         self._set_published(request, queryset, False)
 
     def _set_published(self, request, queryset, published: bool):
+        slugs = _public_slugs(queryset, "event__public_slug")
         count = queryset.update(is_published=published)
-        # queryset.update() bypasses save(), so the post_save receiver that
-        # clears the portfolio cache never fires — clear it by hand or the
-        # change is invisible for up to PORTFOLIO_CACHE_SECONDS and staff
-        # reasonably conclude the action did nothing.
-        from .public_views import invalidate_portfolio_cache
-        invalidate_portfolio_cache()
+        _invalidate_after_bulk_update(slugs)
         word = "shown on" if published else "hidden from"
         self.message_user(request, f"{count} image(s) {word} the public portfolio.")
 

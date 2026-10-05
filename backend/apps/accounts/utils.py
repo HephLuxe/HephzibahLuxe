@@ -154,17 +154,36 @@ def verify_reset_code(email: str, code: str) -> tuple[bool, PasswordResetToken |
 
 ######################################################################## Temp Login code #####################################################################
 
+# Specials for generated passwords. A subset on purpose: no quotes, backslash,
+# angle brackets or `&`, which an email client or template can mangle, and
+# nothing easily confused when a client copies it from the credentials email.
+TEMP_PASSWORD_SPECIALS = "!@#$%*-_+?="
+
+
 def generate_temporary_password(length: int | None = None) -> str:
     """
-    Generate a random alphanumeric temporary password.
+    Generate a random temporary password that satisfies the password policy
+    (apps/accounts/validators.py): at least one uppercase, one lowercase, one
+    digit and one special character, 12-16 characters long.
+
+    One of each required class is placed first and the whole is then shuffled,
+    so the guarantee holds by construction rather than by retrying.
     """
     if length is None:
         length = secrets.choice(range(12, 17))
+    length = max(length, 8)
 
-    alphabet = string.ascii_letters + string.digits
-    password = ''.join(secrets.choice(alphabet) for _ in range(length))
+    alphabet = string.ascii_letters + string.digits + TEMP_PASSWORD_SPECIALS
+    chars = [
+        secrets.choice(string.ascii_uppercase),
+        secrets.choice(string.ascii_lowercase),
+        secrets.choice(string.digits),
+        secrets.choice(TEMP_PASSWORD_SPECIALS),
+    ]
+    chars += [secrets.choice(alphabet) for _ in range(length - len(chars))]
+    secrets.SystemRandom().shuffle(chars)
 
-    return password
+    return ''.join(chars)
 
 
 def send_user_credentials_email(user: User, temporary_password: str) -> bool:

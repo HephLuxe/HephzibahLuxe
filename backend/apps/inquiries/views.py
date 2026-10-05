@@ -23,7 +23,12 @@ from django.conf import settings
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from rest_framework.decorators import (
+    api_view,
+    authentication_classes,
+    permission_classes,
+    throttle_classes,
+)
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -54,6 +59,9 @@ def _error(detail: str, code: str, http_status: int, errors: dict | None = None)
 
 
 @api_view(["POST"])
+# No authentication, so a stale/invalid `Authorization: Bearer` header from an
+# expired portal session cannot turn a lead into a 401 before the view runs.
+@authentication_classes([])
 @permission_classes([])  # Public endpoint
 @throttle_classes([])    # Opted OUT of the project-wide anon ceiling — see below
 def submit_inquiry(request: Request) -> Response:

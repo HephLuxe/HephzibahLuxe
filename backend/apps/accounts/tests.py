@@ -370,6 +370,49 @@ class PasswordResetClientIPTests(TestCase):
         self.assertEqual(token.ip_address, "41.2.3.4")
 
 
+class PasswordResetIgnoresStaleTokensTests(TestCase):
+    """
+    The three public reset steps must not authenticate. With the project-wide
+    JWTAuthentication in place, an expired or garbage `Authorization: Bearer`
+    header — exactly what a locked-out user's browser still holds — was a 401
+    before the view ran, on the one flow meant to get them back in.
+    """
+
+    client_class = APIClient
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.user = User.objects.create_user(
+            email="stale@example.com", password="Sw0rdfish!23",
+            first_name="Ada", last_name="Obi",
+        )
+        self.client.credentials(HTTP_AUTHORIZATION="Bearer not-a-real-token")
+
+    def test_request_ignores_a_stale_token(self):
+        resp = self.client.post(
+            reverse("password_reset_request"), {"email": self.user.email}, format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+
+    def test_verify_and_confirm_ignore_a_stale_token(self):
+        _token, code = create_password_reset_token(self.user)
+
+        verify = self.client.post(
+            reverse("password_reset_verify"),
+            {"email": self.user.email, "code": code}, format="json",
+        )
+        self.assertEqual(verify.status_code, 200)
+
+        confirm = self.client.post(
+            reverse("password_reset_confirm"),
+            {"email": self.user.email, "code": code,
+             "new_password": "N3w-Sw0rdfish!45", "confirm_password": "N3w-Sw0rdfish!45"},
+            format="json",
+        )
+        self.assertEqual(confirm.status_code, 200)
+
+
 class UserLookupEnumerationTests(TestCase):
     """
     GET /users/<email>/ must not tell a caller which addresses have accounts.
