@@ -203,3 +203,30 @@ def validate_document(value):
     return validate_upload(
         value, max_size=MAX_DOCUMENT_SIZE, allowed_types=DOCUMENT_TYPES, label="File",
     )
+
+
+def validate_image_model_field(value):
+    """``validate_image`` as a MODEL-field validator, for fields written through
+    the Django admin rather than a DRF serializer (``HomeStripImage.image``).
+
+    Two adaptations, both needed for the ceiling to work there at all:
+
+      * The admin's ModelForm only catches Django's ``ValidationError``. The
+        DRF one ``validate_upload`` raises escapes it as a 500, so it is
+        re-raised as Django's, which the form renders as a field error.
+      * A model validator receives the ``FieldFile``, not the upload. While it
+        is uncommitted its ``.file`` IS the ``UploadedFile``, so that is what is
+        checked — otherwise the type sniff would be skipped. A committed file is
+        already in storage and was checked on the way in; re-reading it on
+        every edit would cost a storage round trip (see ``validate_upload``).
+    """
+    from django.core.exceptions import ValidationError as DjangoValidationError
+
+    if not value or getattr(value, "_committed", True):
+        return value
+    try:
+        validate_image(value.file)
+    except ValidationError as exc:
+        detail = exc.detail if isinstance(exc.detail, list) else [exc.detail]
+        raise DjangoValidationError([str(d) for d in detail]) from exc
+    return value

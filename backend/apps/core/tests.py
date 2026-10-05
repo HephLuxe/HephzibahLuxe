@@ -816,6 +816,7 @@ class UploadCeilingTests(TestCase):
             "contacts.EventContact.photo",
             "portal.TeamMember.photo",
             "events.EventImage.image",
+            "core.HomeStripImage.image",
             "budgets.BudgetPayment.receipt",
             "meetings.PrepItemFileUpload.file",
             "document_hub.ClientDocument.file",

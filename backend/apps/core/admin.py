@@ -10,6 +10,7 @@ of each app inventing its own columns.
 
 from django.contrib import admin
 
+from .models import HomeStripImage
 from .utils import user_display_name
 
 # The four audit fields, in who/when order. Always readonly: they're
@@ -45,3 +46,11 @@ class AttributionAdminMixin:
     @admin.display(description="Updated by")
     def last_updated_by_display(self, obj):
         return user_display_name(getattr(obj, "last_updated_by", None)) or "—"
+
+
+@admin.register(HomeStripImage)
+class HomeStripImageAdmin(admin.ModelAdmin):
+    list_display = ("image", "alt_text", "sort_order", "is_published")
+    list_editable = ("sort_order", "is_published")
+    list_filter = ("is_published",)
+    readonly_fields = ("id", "import_key", "created_at", "updated_at")

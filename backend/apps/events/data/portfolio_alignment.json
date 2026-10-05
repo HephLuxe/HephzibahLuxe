@@ -1,0 +1,1480 @@
+{
+  "version": 1,
+  "events": [
+    {
+      "id": 1,
+      "identity": {
+        "headline": "A Golden 50th: An Intimate Two-Day Celebration of Family, Faith & Joy",
+        "event_type": "Birthday",
+        "is_published": true
+      },
+      "internal_slug_sha256": "1f8fef9a50018315ba02ecd558fe84105dc7bb0c9ef1f7f18dc23ff07c061823",
+      "before": {
+        "public_slug": "a-golden-50th-an-intimate-two-day-celebration-of-family-faith-joy"
+      },
+      "after": {
+        "public_slug": "golden-50th"
+      }
+    },
+    {
+      "id": 2,
+      "identity": {
+        "headline": "An Intimate 85th: A Celebration of Grace, Family & Legacy",
+        "event_type": "Birthday",
+        "is_published": true
+      },
+      "internal_slug_sha256": "29f4f518499ae9f577147aad9766532cc87d7cf40bc3ece127764d32545f5062",
+      "before": {
+        "public_slug": "an-intimate-85th-a-celebration-of-grace-family-legacy"
+      },
+      "after": {
+        "public_slug": "intimate-85th"
+      }
+    },
+    {
+      "id": 3,
+      "identity": {
+        "headline": "Lagos State Government MSME Engagement Forum",
+        "event_type": "Corporate",
+        "is_published": true
+      },
+      "internal_slug_sha256": "6e6ad940ced6213d4b796d24eb75729c4f49729bbf9058f370aa153052f72b88",
+      "before": {
+        "public_slug": "lagos-state-government-msme-engagement-forum"
+      },
+      "after": {
+        "public_slug": "msme-forum"
+      }
+    }
+  ],
+  "days": [
+    {
+      "id": "795acd0f-eb18-445a-a181-003214353d13",
+      "identity": {
+        "owner_id": 1,
+        "headline": "A Moment Before Fifty \u2014 A Pre-Birthday Portrait Experience",
+        "date": "2021-04-10"
+      },
+      "before": {
+        "slug": "pre-birthday-photoshoot",
+        "event_day_title": "Pre-Birthday Photoshoot"
+      },
+      "after": {
+        "slug": "pre-birthday-photoshoot",
+        "event_day_title": "Pre-Birthday Photoshoot"
+      }
+    },
+    {
+      "id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "identity": {
+        "owner_id": 1,
+        "headline": "Fifty, Unforgettable \u2014 An Evening of Music, Dance & Celebration",
+        "date": "2021-04-16"
+      },
+      "before": {
+        "slug": "event-day-2",
+        "event_day_title": "Event Day 2"
+      },
+      "after": {
+        "slug": "celebration-night",
+        "event_day_title": "Event No. 2"
+      }
+    },
+    {
+      "id": "a7f6bfdd-d8ce-43e6-b30c-f4f05cb044c1",
+      "identity": {
+        "owner_id": 1,
+        "headline": "Rooted in Gratitude \u2014 A Gathering of Thanksgiving & Reflection",
+        "date": "2021-04-14"
+      },
+      "before": {
+        "slug": "event-day-1",
+        "event_day_title": "Event Day 1"
+      },
+      "after": {
+        "slug": "thanksgiving-gathering",
+        "event_day_title": "Event No. 1"
+      }
+    },
+    {
+      "id": "8fcc1d91-2f43-4928-b6d9-7c80559c6a1c",
+      "identity": {
+        "owner_id": 2,
+        "headline": "",
+        "date": "2022-02-27"
+      },
+      "before": {
+        "slug": "event-no-1",
+        "event_day_title": "Event No. 1"
+      },
+      "after": {
+        "slug": "event-no-1",
+        "event_day_title": "Event No. 1"
+      }
+    }
+  ],
+  "images": [
+    {
+      "id": "572a6010-7562-4e85-b7ed-910d40c8a0c4",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "pureones.jpg",
+      "key_sha256": [
+        "564f4543fb295a5f06f8337f353f99bd120bde97394b84d23289c46eb86c6e79",
+        "ea8f2a7d5fc5d62e811e1f3898749e8f02511aaf73df83fbdf717cb82dc18f45"
+      ],
+      "before": {
+        "sort_order": 0,
+        "is_primary": true,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 1,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "5fe3d9d0-7980-4711-8f93-38a32d5fd6d1",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "puretwos.jpg",
+      "key_sha256": [
+        "b53c0f3ea7c0a529497e6b2f7b8663de66804020f56f2125b8f4e5caaa23fa2e",
+        "8905da22dea6920301ba76864d6390ee2d0bb803a63248f3dc1ad9a29870e5b3"
+      ],
+      "before": {
+        "sort_order": 1,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 2,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "88e5d6cf-df70-42e4-b672-35efba63dbc2",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "puresixteens.jpg",
+      "key_sha256": [
+        "6022154bf3e03260a3567d9d5b83d3fd05d8ecc0fc9cff05f06d73e9e740dff4",
+        "408e5629c2295dfd3dab9de4969c0d50fe7c36dcfae77b6061ded0d2cc3fbb80"
+      ],
+      "before": {
+        "sort_order": 2,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 16,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "c9e5a33d-8525-4793-a696-89bd592d5ad9",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "pureseventeens.jpg",
+      "key_sha256": [
+        "e0f7b347f5bf1e0307531286b4f9c5a0e36847c4f905d862183920acb10474ab",
+        "03d2f8228b6a184c81c9c0489aa89afe646abf8c87f438bee6cf680d02520d50"
+      ],
+      "before": {
+        "sort_order": 3,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 17,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "93cd2dde-d466-4bf5-bce7-da3d85dc6044",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "purenineteens.jpg",
+      "key_sha256": [
+        "3b00357af18dcb8936506465a4c950de280a18a723f9513dfde47ec80434405f",
+        "2ada4f40149fb1a4c039f7b36bd1bfec7819d8f5b6390c345d0c78c3b7390693"
+      ],
+      "before": {
+        "sort_order": 4,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 19,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "f78c701e-c4dd-4944-880b-8981ba5af615",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "purenines.jpg",
+      "key_sha256": [
+        "50b7e48c6fd42ca25c1b1ffba97fa2ae4457c4607dfca52341e8d8ce47c856ed",
+        "9e8f4ca831c79357f6e176237816cfd30768cb82e3b4a263da85629fb7660ebd"
+      ],
+      "before": {
+        "sort_order": 5,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 9,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "22b01abf-3913-4908-86e4-11c2df297dd6",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "puretwelves.jpg",
+      "key_sha256": [
+        "323f2b6a0480f69cbe094ca9bee0c039e866ebc55214eb98ad638da722247ab5",
+        "38aedd5fbeb79b00c047cce595e34057ced033e8e8cefe266cf34222d60ea211"
+      ],
+      "before": {
+        "sort_order": 6,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 12,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "e9e9d002-7222-4d97-bac9-138bf4ac29d9",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "purefourteens.jpg",
+      "key_sha256": [
+        "8c01d3445d722a0d83fa24a7c377d862c85d3e1a96e903d18363f5743146b22f",
+        "db8f426c1723a2a2cf624b816eb3eb0a9cd1f20d0d924fdae6f1b5edbf9d656f"
+      ],
+      "before": {
+        "sort_order": 7,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 14,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "7420c3d5-0210-48bd-8250-5f575ce1c295",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "purefifteens.jpg",
+      "key_sha256": [
+        "de6add3b21f35e3df0e55f5aa93740389f34426e2ec7a9ae0a0f68a9430ea41a",
+        "f34a3fd0965a22fc082471677db77b0ef16da9d2164a1a3819e4befacfe5114e"
+      ],
+      "before": {
+        "sort_order": 8,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 15,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "2d287aa4-3b99-4b35-9cc3-743e4c8ed0a7",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "purethirteens.jpg",
+      "key_sha256": [
+        "637e15b4c63f15af54aa95e40c0e8dc7651630de12942bd9fb29a96170307fd3",
+        "c8b638df20ca5a011ab589195621949c1e674032053837c8aff2f0980c6240f7"
+      ],
+      "before": {
+        "sort_order": 9,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 13,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "349767b2-d017-4e38-b899-322f2c2191de",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "puretens.jpg",
+      "key_sha256": [
+        "2e25b405957bf671142551e91d4318439a326a2bbef40e838e1f87c51dfb9323",
+        "1137020b64942f5dc7660d707de4f4bdffeff1c7480790d3d208bb620e7c93e3"
+      ],
+      "before": {
+        "sort_order": 10,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 10,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "a8adb853-15b8-4cec-92a1-d0d9f0de0d8c",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "pureeights.jpg",
+      "key_sha256": [
+        "b301a68937e4c56e6922c8bc9a5092533867f2baecefe4ad3b64e0ea6058bdbd",
+        "98b6d11951a90570804513b5aac126bf843f5cc43089829358ec7901a99a3d08"
+      ],
+      "before": {
+        "sort_order": 11,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 8,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "b6cd10f9-3cd3-475a-9802-c5236dd42612",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "puresixs.jpg",
+      "key_sha256": [
+        "71e9535720b1bc66b34a1ce72fa94e685265ef60c0b40d59730d43e0c35df0a7",
+        "bdcd63619ddd5e3dc3216a0c67d1bb886f7df4324e03dbdf74aad02e7134dd89"
+      ],
+      "before": {
+        "sort_order": 12,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 6,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "e9617a45-6616-4720-a22e-dce322f8d1ae",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "puresevens.jpg",
+      "key_sha256": [
+        "aedcd193184f938c7a063d06031c57a5edd51cd5a6af0194943a20ff503284bf",
+        "d473049001dc5d4464f2ccd85d004635bf5b7e00b39fa6e3270cef1457890568"
+      ],
+      "before": {
+        "sort_order": 13,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 7,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "700fa01c-a2a7-44d1-94b5-a0019805d9f1",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "pureeighteens.jpg",
+      "key_sha256": [
+        "f49aea156105c2f475c3d00088aaa97ffb0f6d1ec668cb65f817772dd79ac89a",
+        "343c2cb37c5b32ea18edd90d916abed7de9afc0c9acdab673aacae77a0d24e7d"
+      ],
+      "before": {
+        "sort_order": 14,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 18,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "5bc2afb6-33fa-4a90-974a-ac60fc88a7eb",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "purefours.jpg",
+      "key_sha256": [
+        "ee09e85c71b36676d7087b7cf1cb95fa930a0cd6a814fb4d94ba83359d8d9db1",
+        "597be77f35e89dc383ccc4ea50c79540d811a403bd0fc58439b862b45d7a1bc3"
+      ],
+      "before": {
+        "sort_order": 15,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 4,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "db54a9e6-1fb9-49de-86b5-90005c3628ef",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "purefives.jpg",
+      "key_sha256": [
+        "313f0001a0ebad21037f724270ff959860c690ece4b0f154f4c8396abc88e3a4",
+        "d416da89d10796d26b0f6e950bc6691c8a6e4e8bb2f57a954493aa1979f3f3df"
+      ],
+      "before": {
+        "sort_order": 16,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 5,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "973aee68-d9a5-425e-a401-a87d1083e8de",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "pureelevens.jpg",
+      "key_sha256": [
+        "d7beef08a744becdc9fe332f56adcbc4353f2141ddb3d7021af0aecca6815f64",
+        "b51d9e9b1fc847e47be51f14aef3dce325a6372084b72187be53e9ea22ff11b0"
+      ],
+      "before": {
+        "sort_order": 17,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 11,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "5e0f2cd5-d903-4ba9-b875-a80efc404a84",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "purethrees.jpg",
+      "key_sha256": [
+        "114b591c340ce5208261c805c0517a08caf9e739efbc47847546e1ffec4d176b",
+        "7a5ca9b03b7401676c116bae208ad844c8ab3ae9033a0c54d82cfc657e5cd3b2"
+      ],
+      "before": {
+        "sort_order": 18,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 3,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "46302a28-d88b-49de-b799-6e0dccc6cad5",
+      "event_id": 1,
+      "event_day_id": "a7f6bfdd-d8ce-43e6-b30c-f4f05cb044c1",
+      "filename": "rootedones.jpg",
+      "key_sha256": [
+        "9c853d1f1e0fe9a89308acc204af5aa1d4447233628ac62c65114258fd6877c7",
+        "b2d225c7ae4b52d0c75a351ecc7089fdf5248515ff6acd63c774ff8edbe8738b"
+      ],
+      "before": {
+        "sort_order": 0,
+        "is_primary": true,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 1,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "981c8f1d-712e-4263-b063-a170562849cd",
+      "event_id": 1,
+      "event_day_id": "a7f6bfdd-d8ce-43e6-b30c-f4f05cb044c1",
+      "filename": "rootedthrees.jpg",
+      "key_sha256": [
+        "d3fe1a1687cb22535d8945c48711d26a3c59d4e5d4e18e0d92cd12ff14b89bf7",
+        "4d8b774db3cbd674d6707ffe715ed01f33366336f7f626c1cb6aa3b1459b4c1d"
+      ],
+      "before": {
+        "sort_order": 1,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 3,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "d88d8ded-3afd-4fd3-8823-b4e20d6bee91",
+      "event_id": 1,
+      "event_day_id": "a7f6bfdd-d8ce-43e6-b30c-f4f05cb044c1",
+      "filename": "rootedtens.jpg",
+      "key_sha256": [
+        "bd0440eab5b6736d4eec0a68cba8d15eb60e8d3c2eb532624dd452163e549ff1",
+        "568af690d01ca20fe518444b99239f110f9260db234517744fb27b19f2c3b990"
+      ],
+      "before": {
+        "sort_order": 2,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 10,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "ff6c9ab9-2512-4783-8df4-301554f90965",
+      "event_id": 1,
+      "event_day_id": "a7f6bfdd-d8ce-43e6-b30c-f4f05cb044c1",
+      "filename": "rootedfours.jpg",
+      "key_sha256": [
+        "6fffbecb7e8019dc40e3a646011c78e40de0f5fceb523e00e37c96e7a05e9156",
+        "7b5219938c3b79da7ba85191687bd0a277532a6459705fa03cbdf3064fc0a405"
+      ],
+      "before": {
+        "sort_order": 3,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 4,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "5496f981-be0e-4065-a298-9596db568073",
+      "event_id": 1,
+      "event_day_id": "a7f6bfdd-d8ce-43e6-b30c-f4f05cb044c1",
+      "filename": "rootedfourteens.jpg",
+      "key_sha256": [
+        "b709a39a6f20e9d9f7ac0e64806c48e2c2853af422b5bf01f1935d303ec24a85",
+        "c7c64f71986dbe74d0d4271e2eaf7ae63aadc91bcf24f01fc7d0b8ddf6428a1d"
+      ],
+      "before": {
+        "sort_order": 4,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 14,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "e7b28e92-f809-419c-b86c-fba4c7b8bd63",
+      "event_id": 1,
+      "event_day_id": "a7f6bfdd-d8ce-43e6-b30c-f4f05cb044c1",
+      "filename": "rootedeights.jpg",
+      "key_sha256": [
+        "1b2e1b246540169e3c523454548596144e0277e81009010f27b4cc72c0de792b",
+        "cdfe550f29e16a35e3daaa4834de396574f1e4f4ab72753306970781c1af3b84"
+      ],
+      "before": {
+        "sort_order": 5,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 8,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "b9f34cee-ac4a-4d79-bd36-dcfd37adfa03",
+      "event_id": 1,
+      "event_day_id": "a7f6bfdd-d8ce-43e6-b30c-f4f05cb044c1",
+      "filename": "rootedsixs.jpg",
+      "key_sha256": [
+        "cfc84b2c3a613ca841e102c4947ae845c6d92a089f26d91f15014d06a4afc636",
+        "859b43b58fad7c60f784b39ee606bbf1a5179cda1f9229f439f2daf1bf21b9b4"
+      ],
+      "before": {
+        "sort_order": 6,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 6,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "65044be1-ee64-412f-bd84-8d40d3a21f86",
+      "event_id": 1,
+      "event_day_id": "a7f6bfdd-d8ce-43e6-b30c-f4f05cb044c1",
+      "filename": "rootedthirteens.jpg",
+      "key_sha256": [
+        "da308910fe60afbd882350bf283486087b1a8ad4327c1d7a79851798fb566303",
+        "c419d14e206132abcec71798743c1da441038faf234b3024fa3316ea91f08878"
+      ],
+      "before": {
+        "sort_order": 7,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 13,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "c580be75-f7f5-445f-b9d8-92784106b6a8",
+      "event_id": 1,
+      "event_day_id": "a7f6bfdd-d8ce-43e6-b30c-f4f05cb044c1",
+      "filename": "rootedfives.jpg",
+      "key_sha256": [
+        "a1265d6d8b2c6348b0d63a3605f16286997bd7004af45685a2d632488af6f363",
+        "a7cc524341ecd11405d10f1e249398f0d91c127a2487fa81feec57da5129da29"
+      ],
+      "before": {
+        "sort_order": 8,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 5,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "48ea830e-30b9-43ea-b2dc-456794d5bf52",
+      "event_id": 1,
+      "event_day_id": "a7f6bfdd-d8ce-43e6-b30c-f4f05cb044c1",
+      "filename": "rootedelevens.jpg",
+      "key_sha256": [
+        "01ec3ec67d29511267b7282ccd2939c8d526085b5136d51364c80c13cf2caa5e",
+        "7d4a5f0b75860c7766b54ea813175d48295ecc386bfbe0da43ca05eacc0d5954"
+      ],
+      "before": {
+        "sort_order": 9,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 11,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "82f1382c-0fb1-44a1-a835-cccdd4a31fe7",
+      "event_id": 1,
+      "event_day_id": "a7f6bfdd-d8ce-43e6-b30c-f4f05cb044c1",
+      "filename": "rootednines.jpg",
+      "key_sha256": [
+        "68774300265af9ff88563d8efc154f42b2b21c2426bb6487bfcaa97108cb7792",
+        "ce8813277f108d51af44c29ab76e6766748178dfcf435754f94c2747102fe0dc"
+      ],
+      "before": {
+        "sort_order": 10,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 9,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "ebf4c12b-92f1-4a30-b0eb-8fb2e287e35d",
+      "event_id": 1,
+      "event_day_id": "a7f6bfdd-d8ce-43e6-b30c-f4f05cb044c1",
+      "filename": "rootedtwos.jpg",
+      "key_sha256": [
+        "51155da2833f6cfa35f7b0ddaf085bdcbfa20ef5f90a98e9c076baeb386a7bd9",
+        "252d413fd0b142bd37b0fe1b665eeb92b3bc3f02949963e00694cb5b7ae837fc"
+      ],
+      "before": {
+        "sort_order": 11,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 2,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "25a47484-7312-4676-98f5-76e851c02d2a",
+      "event_id": 1,
+      "event_day_id": "a7f6bfdd-d8ce-43e6-b30c-f4f05cb044c1",
+      "filename": "rootedsevens.jpg",
+      "key_sha256": [
+        "615fb57980ec9a0bc92b603fab961158118b5714d20226c293016e3aed789d9d",
+        "8406998bffd75712598e08edce6c67b838855e832a1777f81dffa7ec12481d84"
+      ],
+      "before": {
+        "sort_order": 12,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 7,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "a92b41f4-209b-4139-90ba-fc6603ba2d88",
+      "event_id": 1,
+      "event_day_id": "a7f6bfdd-d8ce-43e6-b30c-f4f05cb044c1",
+      "filename": "rootedtwelves.jpg",
+      "key_sha256": [
+        "7f8e4ed3a1b34783bef8f6eb417b48eea170783618bc8c776f9faf50379dce96",
+        "8f95ba621989e8410af67f068667387f7dbd36b005867f829772f591e55761d8"
+      ],
+      "before": {
+        "sort_order": 13,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 12,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "784d964a-5b48-46f7-9550-f257d47c0028",
+      "event_id": 2,
+      "event_day_id": "8fcc1d91-2f43-4928-b6d9-7c80559c6a1c",
+      "filename": "legacyeighteens.jpg",
+      "key_sha256": [
+        "24fb6d24b2bbc5bac9a4696768ef6ef70a4f6eb358ec43ca218fe8d393b8f3aa",
+        "9bc523b109f3705e03e31d1d5b0c8f2e53fc4abf4fb1c0661f9f42329f2a7b4a"
+      ],
+      "before": {
+        "sort_order": 0,
+        "is_primary": true,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 17,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "0d67ae59-a91d-49b1-9077-c9c46345a31d",
+      "event_id": 2,
+      "event_day_id": "8fcc1d91-2f43-4928-b6d9-7c80559c6a1c",
+      "filename": "legacyelevens.jpg",
+      "key_sha256": [
+        "6a3d29cb0d87009732418aba2b7faa82c8faee48d90d4a6311792cbb0ae218e5",
+        "d5b9e1d2cfa1f54a588936541a0d0a31609524b7bb9799e2ffb45eb5c0192a36"
+      ],
+      "before": {
+        "sort_order": 1,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 10,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "c185b87d-023d-4915-9142-79756c80f99c",
+      "event_id": 2,
+      "event_day_id": "8fcc1d91-2f43-4928-b6d9-7c80559c6a1c",
+      "filename": "legacynines.jpg",
+      "key_sha256": [
+        "e86f7a3ba20f223c7d936fdffe3645c30a268d2a3724ecfa381f3bf1220de238",
+        "ac803678e286937c55df8d5c941d46b3bc9a24c87f9e4ac61f5fbd630b257c24"
+      ],
+      "before": {
+        "sort_order": 2,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 8,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "9a3a0485-408a-4c64-bf85-69357af67831",
+      "event_id": 2,
+      "event_day_id": "8fcc1d91-2f43-4928-b6d9-7c80559c6a1c",
+      "filename": "legacyfives.jpg",
+      "key_sha256": [
+        "730b709c1b4b5b9aafdd43e115c32b5b09fa126f6bdcb0ba89a2c8ca9b60a0c0",
+        "f466a7a14532fd804919da4804631eea8727a6ac1bac9d57a474f77ee58bfb51"
+      ],
+      "before": {
+        "sort_order": 3,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 4,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "84226121-08c9-42b8-b8e7-4332fc945663",
+      "event_id": 2,
+      "event_day_id": "8fcc1d91-2f43-4928-b6d9-7c80559c6a1c",
+      "filename": "legacythrees.jpg",
+      "key_sha256": [
+        "b7422a09a379fe776673db7b0da01afcdb862d80bfae005779175b69106361e4",
+        "71f3267b6692dfe461baf85945d1f018e6c0d281007a475b332f10836e05fbc3"
+      ],
+      "before": {
+        "sort_order": 4,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 2,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "ec2c1e37-6044-4569-a677-a2aa83531a6b",
+      "event_id": 2,
+      "event_day_id": "8fcc1d91-2f43-4928-b6d9-7c80559c6a1c",
+      "filename": "legacyseventeens.jpg",
+      "key_sha256": [
+        "62c15d9df1bba5e71d3fd6001c29c5609d359e79fecd2d9dfdac6719e6b916cb",
+        "e141c83d1584e3023e6b94c3da8363c42c95b8f7924fd5a5b5ffb00e493067cb"
+      ],
+      "before": {
+        "sort_order": 5,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 16,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "96f86c52-9bae-4486-af68-632c78c18703",
+      "event_id": 2,
+      "event_day_id": "8fcc1d91-2f43-4928-b6d9-7c80559c6a1c",
+      "filename": "legacyfifteens.jpg",
+      "key_sha256": [
+        "98da9708dcbef39aa4082b3474e95a83d817e56d55d48344ae790df562c406b0",
+        "5c2b4d63438dffadd6afb68304c2f29480718d62b572d9db844340cc41328f30"
+      ],
+      "before": {
+        "sort_order": 6,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 14,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "39e8b1d1-bb57-4f8a-a56e-43f044a39835",
+      "event_id": 2,
+      "event_day_id": "8fcc1d91-2f43-4928-b6d9-7c80559c6a1c",
+      "filename": "legacytwelves.jpg",
+      "key_sha256": [
+        "2e57bdd85b29bc53d716b4cd313bcf02c7cacfd37e052706080959e6a1c0b6e0",
+        "e54dae20dfdc914f1a490145f081a422d91538a302a4ff64b1c311d0b128d5bd"
+      ],
+      "before": {
+        "sort_order": 7,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 11,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "0f3dccb1-9aa9-469c-b154-a563eba87090",
+      "event_id": 2,
+      "event_day_id": "8fcc1d91-2f43-4928-b6d9-7c80559c6a1c",
+      "filename": "legacysixteens.jpg",
+      "key_sha256": [
+        "ee5917f553ef00996dfc1c41b94ec908cdfa54e9b714ff76f41de803fd6dc91a",
+        "d1a6cf71da240e955091c4706d3366f8f36962830eb5c92b96a3fd64ffba28bc"
+      ],
+      "before": {
+        "sort_order": 8,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 15,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "431aba03-fe0d-453b-adb9-6f47c110036e",
+      "event_id": 2,
+      "event_day_id": "8fcc1d91-2f43-4928-b6d9-7c80559c6a1c",
+      "filename": "legacyfourteens.jpg",
+      "key_sha256": [
+        "d701383134fbbf72d977b079d4e0bf842cdb058e4f8496d34001bd8651037035",
+        "d19edf6ac6325f70188050b1cbd0b9eb463423a268af8a1a854e47fb5806444c"
+      ],
+      "before": {
+        "sort_order": 9,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 13,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "5b2ad621-9b43-4fd0-9992-ca6bc1cedcc9",
+      "event_id": 2,
+      "event_day_id": "8fcc1d91-2f43-4928-b6d9-7c80559c6a1c",
+      "filename": "legacythirteens.jpg",
+      "key_sha256": [
+        "5e496ba328c689af2d2f6ee5a6cdfaf01d7f75e872a3200b51c0f1c317b23b6e",
+        "5a09d7c1da8d1d1f697df78ef8b2de36bc17a0f6f5461f80137396c812dbecd1"
+      ],
+      "before": {
+        "sort_order": 10,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 12,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "997e44f2-b463-4933-b5b9-c68b266dcd11",
+      "event_id": 2,
+      "event_day_id": "8fcc1d91-2f43-4928-b6d9-7c80559c6a1c",
+      "filename": "legacyfours.jpg",
+      "key_sha256": [
+        "10b0b311273c742d41143e63385e580691ea040e2d87021aa43fe451612119e2",
+        "1fab186744890861133bc0e58738f7f9ba05533b0ce1b35db1d236c34e0d51f0"
+      ],
+      "before": {
+        "sort_order": 11,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 3,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "4da21462-9581-48a4-a6b4-062942339d01",
+      "event_id": 2,
+      "event_day_id": "8fcc1d91-2f43-4928-b6d9-7c80559c6a1c",
+      "filename": "legacyones.jpg",
+      "key_sha256": [
+        "3f359ca2ebbe2ff9495a42d86790b2b6d7c137439a826d5a59b562163ace9f1f",
+        "772ca64d846f6c71785f9f53685f8f5576ff76f916ba05a63aa82159dee639c3"
+      ],
+      "before": {
+        "sort_order": 12,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 0,
+        "is_primary": true,
+        "is_published": true
+      }
+    },
+    {
+      "id": "4d88f552-c464-432f-856b-45ff7f57c653",
+      "event_id": 2,
+      "event_day_id": "8fcc1d91-2f43-4928-b6d9-7c80559c6a1c",
+      "filename": "legacysixs.jpg",
+      "key_sha256": [
+        "9f4b40b3de5293c06bfdb59f8f75c9f9ff08bd53a3bc9404d1d8c82810ef6abb",
+        "f62dcd2c4a40bc5efb3c7b885a389f12dd5847cfd5c93c23ea05d8b8f2330681"
+      ],
+      "before": {
+        "sort_order": 13,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 5,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "fac2715e-5466-4a9a-8b14-b1fae5e8a0a4",
+      "event_id": 2,
+      "event_day_id": "8fcc1d91-2f43-4928-b6d9-7c80559c6a1c",
+      "filename": "legacytwos.jpg",
+      "key_sha256": [
+        "05fa488c76e3e27ff89a9a4482800534696190619f197a1b7eecbd81a8e3167d",
+        "b16059792ed7eb07991fcce6056c3dea9647cbb53afa6169b9e5a861b0fa4e7e"
+      ],
+      "before": {
+        "sort_order": 14,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 1,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "5994feb0-b937-42e5-9fbe-f1cce8ef1f79",
+      "event_id": 2,
+      "event_day_id": "8fcc1d91-2f43-4928-b6d9-7c80559c6a1c",
+      "filename": "legacysevens.jpg",
+      "key_sha256": [
+        "14dfa1bab47472e328b24f7545f8c84719f59ce5bfe18b0fcc6f250159101bc2",
+        "40f8e5573f0aa28fb17fbdd77ff98a0b8813eec8dacbb4c3b62f6146ef82238d"
+      ],
+      "before": {
+        "sort_order": 15,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 6,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "cf256c29-aded-4b8c-9a3b-c219d5cf3ada",
+      "event_id": 2,
+      "event_day_id": "8fcc1d91-2f43-4928-b6d9-7c80559c6a1c",
+      "filename": "legacyeights.jpg",
+      "key_sha256": [
+        "e75cc5ae08c8d5be151988e0823ced072a91761e9295f9f188cc305ab48ff42f",
+        "20ec40edd495a230dbe63e21599de93bb70db3d599578d9eab34a22129d3bcb3"
+      ],
+      "before": {
+        "sort_order": 16,
+        "is_primary": false,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 7,
+        "is_primary": false,
+        "is_published": true
+      }
+    },
+    {
+      "id": "f252dff1-98ca-44cb-a48b-282aa774fde0",
+      "event_id": 2,
+      "event_day_id": null,
+      "filename": "legacysixs.jpg",
+      "key_sha256": [
+        "8977cfa1164fb814e13ab6dc7165e81ae1db9e4667cdd9f6c27cbbf646beac3b",
+        "c08049c8d4197236aa58490812bb06022ac5902963043ba4312d8e30f65ce160"
+      ],
+      "before": {
+        "sort_order": 0,
+        "is_primary": true,
+        "is_published": true
+      },
+      "after": {
+        "sort_order": 1,
+        "is_primary": false,
+        "is_published": false
+      }
+    }
+  ],
+  "uploads": [
+    {
+      "id": "004b06c7-93af-5967-b484-eb35c2ff33f4",
+      "event_id": 1,
+      "event_day_id": null,
+      "filename": "photoshootsixs.jpg",
+      "sort_order": 0,
+      "is_primary": true,
+      "is_published": true,
+      "sha256": "2126dfda0fd2a1e1479f364e57b937040b018319b517589e005efbc5804527e7"
+    },
+    {
+      "id": "18ac1868-1c56-5b8c-b7d9-7de7c37c9968",
+      "event_id": 2,
+      "event_day_id": null,
+      "filename": "portfoliothirteen.jpg",
+      "sort_order": 0,
+      "is_primary": true,
+      "is_published": true,
+      "sha256": "bd860351168906c57e0c8d15a3a476a3b6e08c87377fd2e9ccb71156f9d1c77c"
+    },
+    {
+      "id": "43e61806-a36c-5f4c-90ca-27868e480793",
+      "event_id": 3,
+      "event_day_id": null,
+      "filename": "portfoliofourteen.jpg",
+      "sort_order": 0,
+      "is_primary": true,
+      "is_published": true,
+      "sha256": "d4e789add21a21f54997707e60c48a5c901dd8db45b101063da1a0644d3116da"
+    },
+    {
+      "id": "fe7d4a00-7364-5f67-ad99-8dafc0c17e96",
+      "event_id": 1,
+      "event_day_id": "795acd0f-eb18-445a-a181-003214353d13",
+      "filename": "goldenone.jpg",
+      "sort_order": 0,
+      "is_primary": true,
+      "is_published": true,
+      "sha256": "7a339e4a7ced7332b554e11e9998002f3783e324c62355dd6fb40f57dff2c6ae"
+    },
+    {
+      "id": "ea02aebb-5f45-5829-abd9-227282164d13",
+      "event_id": 1,
+      "event_day_id": "795acd0f-eb18-445a-a181-003214353d13",
+      "filename": "photoshootones.jpg",
+      "sort_order": 1,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "65014725785f19c289162b45e60de12cadeb25d0dd833e4c02a60ee8d676bf34"
+    },
+    {
+      "id": "1482c0c1-1e32-55b4-9d68-24bbe28cda1b",
+      "event_id": 1,
+      "event_day_id": "795acd0f-eb18-445a-a181-003214353d13",
+      "filename": "photoshoottwos.jpg",
+      "sort_order": 2,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "382571b2c23373a0a904c1d4291f0cfc53e4d80da4f8a52575dcf0ac1abba0a1"
+    },
+    {
+      "id": "4577e25a-bb7b-50d0-a504-7ae74cd50974",
+      "event_id": 1,
+      "event_day_id": "795acd0f-eb18-445a-a181-003214353d13",
+      "filename": "photoshootthrees.jpg",
+      "sort_order": 3,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "7818f29f4907a34311c80a07ab8969d454ef87101d8c789c98a830270de1c052"
+    },
+    {
+      "id": "2cb02cdc-b579-5a34-818d-d41729c56849",
+      "event_id": 1,
+      "event_day_id": "795acd0f-eb18-445a-a181-003214353d13",
+      "filename": "photoshootfours.jpg",
+      "sort_order": 4,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "2f7b322d009fe5b65b28ff5e33cc6141a470d6ee8225c3e5e4402a7a4c51d447"
+    },
+    {
+      "id": "9f07c605-3498-50a5-9fe1-60b3c5f5e01d",
+      "event_id": 1,
+      "event_day_id": "795acd0f-eb18-445a-a181-003214353d13",
+      "filename": "photoshootfives.jpg",
+      "sort_order": 5,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "b92807db4e6c981504021c03b86d72b0cf1a85800fe960bcb63007f44c8205e5"
+    },
+    {
+      "id": "cdb98b68-cd70-5cf8-808c-850cd67adc33",
+      "event_id": 1,
+      "event_day_id": "795acd0f-eb18-445a-a181-003214353d13",
+      "filename": "photoshootsixs.jpg",
+      "sort_order": 6,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "2126dfda0fd2a1e1479f364e57b937040b018319b517589e005efbc5804527e7"
+    },
+    {
+      "id": "cc5d418d-28de-585e-9183-243af669077e",
+      "event_id": 1,
+      "event_day_id": "795acd0f-eb18-445a-a181-003214353d13",
+      "filename": "photoshootsevens.jpg",
+      "sort_order": 7,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "994c7f89d5fe2857b80f37201481ad37ace11f8b38fbc2ec25036dbdd6c264b7"
+    },
+    {
+      "id": "ed7a5531-a5ea-5a29-827c-cf690d20c41f",
+      "event_id": 1,
+      "event_day_id": "795acd0f-eb18-445a-a181-003214353d13",
+      "filename": "photoshooteights.jpg",
+      "sort_order": 8,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "917fc4e7a24fb467039a709ac859d48ee3c863c4e50f38aa723ddf3d900f1b61"
+    },
+    {
+      "id": "6086c49b-5667-5544-a67a-7c352d9c48d0",
+      "event_id": 1,
+      "event_day_id": "795acd0f-eb18-445a-a181-003214353d13",
+      "filename": "photoshootnines.jpg",
+      "sort_order": 9,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "4dc6320c1422c5e095c7a533cb3cb496f689db73b695fecb9578682f339f22ea"
+    },
+    {
+      "id": "27a43e86-4acb-5c8f-9a4e-5a18967e332b",
+      "event_id": 1,
+      "event_day_id": "795acd0f-eb18-445a-a181-003214353d13",
+      "filename": "photoshoottens.jpg",
+      "sort_order": 10,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "df23e1c79d604441987213420406bb9dcc25f2ae6dd9c87db9ac77adbf3cf375"
+    },
+    {
+      "id": "af397522-3a68-59ab-af9f-ceb8778cf4cc",
+      "event_id": 1,
+      "event_day_id": "795acd0f-eb18-445a-a181-003214353d13",
+      "filename": "photoshootelevens.jpg",
+      "sort_order": 11,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "df745bbe32d80fa181fbf8cfd395e1577512e32f7cdb35d2b3e3fdee04590e3c"
+    },
+    {
+      "id": "8359b681-897d-5b33-8716-1c35bbc53fc4",
+      "event_id": 1,
+      "event_day_id": "795acd0f-eb18-445a-a181-003214353d13",
+      "filename": "photoshoottwelves.jpg",
+      "sort_order": 12,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "30b50dfb8df3b063d792f191d0db6c457bf297d2cce1a69513141e2ee1a43dd8"
+    },
+    {
+      "id": "9a6ce481-6b50-5695-bed3-6f767cd70a3e",
+      "event_id": 1,
+      "event_day_id": "795acd0f-eb18-445a-a181-003214353d13",
+      "filename": "photoshootthirteens.jpg",
+      "sort_order": 13,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "5409740a8ce73971fc740f6c274cd23519a074bd373b4b7cbe7873c8bd1e8e44"
+    },
+    {
+      "id": "44847c7c-42e5-55e6-b7e8-6024965eaff7",
+      "event_id": 1,
+      "event_day_id": "795acd0f-eb18-445a-a181-003214353d13",
+      "filename": "photoshootfourteens.jpg",
+      "sort_order": 14,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "94550fa638c888dd1710494fd08712feab755c8f5958985d3037f28b42cf675d"
+    },
+    {
+      "id": "0a689cc1-9470-5f77-81d6-e17334680456",
+      "event_id": 1,
+      "event_day_id": "7f65b933-bcbc-4c5f-80bb-d22792b97e9b",
+      "filename": "goldenthree.jpg",
+      "sort_order": 0,
+      "is_primary": true,
+      "is_published": true,
+      "sha256": "c55db12f1438ec87a9e4b4e16a5f91bde955e970c7834871f4a6a4ed3b9db89e"
+    },
+    {
+      "id": "318e9350-d9ef-564d-ba80-02b6affff178",
+      "event_id": 1,
+      "event_day_id": "a7f6bfdd-d8ce-43e6-b30c-f4f05cb044c1",
+      "filename": "goldentwo.jpg",
+      "sort_order": 0,
+      "is_primary": true,
+      "is_published": true,
+      "sha256": "ae96af3633a19b80a5e1c84c4153e44e6186d7aaacbcdd3a59974a6ca455f35c"
+    },
+    {
+      "id": "eabfeb29-4014-587a-a860-8f2fa8e7d4b0",
+      "event_id": 2,
+      "event_day_id": "8fcc1d91-2f43-4928-b6d9-7c80559c6a1c",
+      "filename": "legacytens.jpg",
+      "sort_order": 9,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "147fde5cbad0835f1ba83ffd35905cbd0bccadbdf281ccda0f4132e5547ce6b8"
+    },
+    {
+      "id": "47465710-0c3d-5c06-a74b-9e45c84a51ce",
+      "event_id": 3,
+      "event_day_id": null,
+      "filename": "lagosones.jpg",
+      "sort_order": 1,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "46583f14b43ef403b02cf40d4b375299c47b05e661b4530fa62a82dadbeb1574"
+    },
+    {
+      "id": "115e96d0-9af2-536d-b0a7-71fc7fe37802",
+      "event_id": 3,
+      "event_day_id": null,
+      "filename": "lagostwos.jpg",
+      "sort_order": 2,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "7ce6228b01a71d68394620a36ee9833e3e70804644ca1093d08631b1d1c7f4ec"
+    },
+    {
+      "id": "6f278746-ff83-5f63-8542-d397822234df",
+      "event_id": 3,
+      "event_day_id": null,
+      "filename": "lagosthrees.jpg",
+      "sort_order": 3,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "950aaefa2cdd021b2f635ceba7c124c7c1767905330b861bfa9fdf0a3157cf46"
+    },
+    {
+      "id": "1c61fec7-6d9b-56c6-a605-bd849bf0038b",
+      "event_id": 3,
+      "event_day_id": null,
+      "filename": "lagosfours.jpg",
+      "sort_order": 4,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "c903f2df4e305abc427dc5807ab70a1426ae08bd90f4805d8af0922df0c42cc0"
+    },
+    {
+      "id": "d9135111-23b8-5b1d-ab97-5e0d4dac30f7",
+      "event_id": 3,
+      "event_day_id": null,
+      "filename": "lagosfives.jpg",
+      "sort_order": 5,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "2a4df71b1a35fc411da2e7d15c0eb3963ae280bfb0f4dc80ab26220e9f6813cd"
+    },
+    {
+      "id": "2a12e9de-76f3-54c5-a125-c6bf548aee80",
+      "event_id": 3,
+      "event_day_id": null,
+      "filename": "lagossixs.jpg",
+      "sort_order": 6,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "729fd92c0c1be0ccad916aa4a3f837c54f55904c0f1d4c9b9157c1e11a665cb4"
+    },
+    {
+      "id": "d66b12e6-4eef-5eba-bec5-22e78f49bc06",
+      "event_id": 3,
+      "event_day_id": null,
+      "filename": "lagossevens.jpg",
+      "sort_order": 7,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "7ccc8b068ca3914ae543c453bf3d4fe59badfb5b82853737c85a0b2a9377575e"
+    },
+    {
+      "id": "9e0e9bf9-a4bd-5f71-b3d4-874600ac4167",
+      "event_id": 3,
+      "event_day_id": null,
+      "filename": "lagoseights.jpg",
+      "sort_order": 8,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "0d19f226dddbc2358c3c61f1c35c8c77676432e66c4d2176e628b50323d61df3"
+    },
+    {
+      "id": "76e9e53f-fad8-5da7-9d10-464f2f781cfa",
+      "event_id": 3,
+      "event_day_id": null,
+      "filename": "lagosnines.jpg",
+      "sort_order": 9,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "cc875d383b9ab378718f3649555acc712c42a8a011cb974de1c6809634f24f74"
+    },
+    {
+      "id": "c1a79110-6dd0-5cc6-beb3-4f7d7aecd468",
+      "event_id": 3,
+      "event_day_id": null,
+      "filename": "lagostens.jpg",
+      "sort_order": 10,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "4437d4add7a3522ba5b1c13ad74587734765288a8b473e49fbbf9a0ee62ae5e2"
+    },
+    {
+      "id": "27a9cef5-e35c-59c4-be02-bfe2a1d69719",
+      "event_id": 3,
+      "event_day_id": null,
+      "filename": "lagoselevens.jpg",
+      "sort_order": 11,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "4933b0f8eeca59a03126d2ee82cb3ae4af8c4fa6cea22901d58fde098569731d"
+    },
+    {
+      "id": "e90d8957-503f-5fee-8690-fd25b70cb108",
+      "event_id": 3,
+      "event_day_id": null,
+      "filename": "lagostwelves.jpg",
+      "sort_order": 12,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "0c810f0a005fb6367a6ecb5e190136394b4290962a988107c0f0762610adc993"
+    },
+    {
+      "id": "2313d118-ae3a-5727-9898-5c80f623787e",
+      "event_id": 3,
+      "event_day_id": null,
+      "filename": "lagosthirteens.jpg",
+      "sort_order": 13,
+      "is_primary": false,
+      "is_published": true,
+      "sha256": "e2b7fe828014590c2ec53b9ee33e8f9bbab0fcf8d085fca19f3cd670d28684ca"
+    }
+  ]
+}

@@ -22,6 +22,9 @@ import uuid
 from django.conf import settings
 from django.db import models
 
+from .storages import select_public_media_storage
+from .uploads import validate_image_model_field
+
 
 class TimestampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
@@ -75,3 +78,20 @@ class AttributedModel(models.Model):
 
     class Meta:
         abstract = True
+
+
+class HomeStripImage(UUIDTimestampedModel):
+    image = models.ImageField(
+        upload_to="home-strip/", storage=select_public_media_storage, max_length=500,
+        validators=[validate_image_model_field],
+    )
+    alt_text = models.CharField(max_length=255, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    is_published = models.BooleanField(default=False)
+    import_key = models.CharField(max_length=255, unique=True, default=uuid.uuid4, editable=False)
+
+    class Meta:
+        ordering = ("sort_order", "created_at", "id")
+
+    def __str__(self):
+        return self.alt_text or self.image.name

@@ -43,7 +43,9 @@ def _old_style(img: EventImage, content: bytes) -> str:
     return old
 
 
-class RekeyPublicImagePathsTests(TestCase):
+class _RekeyFixture(TestCase):
+    """Two images (event level + day level) re-homed on old-style keys."""
+
     def setUp(self):
         self.client_user = User.objects.create_user(
             first_name="Winifred", last_name="Ojulari", email="rekey@example.com", password="x",
@@ -79,6 +81,8 @@ class RekeyPublicImagePathsTests(TestCase):
         with self.storage.open(name, "rb") as fh:
             return fh.read()
 
+
+class RekeyPublicImagePathsTests(_RekeyFixture):
     def test_the_old_path_carries_the_slug_and_the_new_one_does_not(self):
         self.assertIn(self.event.slug, self.old[0])
         for name in self.new:
@@ -96,7 +100,7 @@ class RekeyPublicImagePathsTests(TestCase):
             self.assertTrue(self.storage.exists(old))
             self.assertFalse(self.storage.exists(new))
 
-    def test_commit_moves_files_updates_rows_and_removes_old_objects(self):
+    def test_commit_copies_files_updates_rows_and_retains_old_objects(self):
         cache.set(_LIST_CACHE_KEY, ["stale"])
         cache.set(_detail_cache_key(self.event.public_slug), {"stale": True})
         notifications = Notification.objects.count()
@@ -107,7 +111,7 @@ class RekeyPublicImagePathsTests(TestCase):
         self.assertEqual(err, "")
         self.assertEqual(self._names(), self.new)
         for old, new, content in zip(self.old, self.new, self.contents):
-            self.assertFalse(self.storage.exists(old))
+            self.assertTrue(self.storage.exists(old))
             self.assertEqual(self._read(new), content)
         self.assertIsNone(cache.get(_LIST_CACHE_KEY))
         self.assertIsNone(cache.get(_detail_cache_key(self.event.public_slug)))
@@ -152,15 +156,37 @@ class RekeyPublicImagePathsTests(TestCase):
         self.assertIn(f"copied: {self.old[1]} -> {self.new[1]}", out)
         self.assertEqual(self._names(), self.new)
 
-    def test_a_target_with_a_different_size_aborts_before_any_write(self):
-        self.storage.save(self.new[1], ContentFile(b"something else entirely, longer"))
-        out, _ = self._run()
-        self.assertIn("WILL ABORT: Target exists with a different size", out)
-        with self.assertRaisesMessage(CommandError, "different size"):
-            self._run("--commit")
+    def test_conflicting_destination_is_reported_on_stderr_and_fails(self):
+        """Same size, different bytes: a conflict. Never skipped silently — the
+        dry run and the commit both name it on stderr and exit non-zero; the
+        commit still moves every other row."""
+        conflict = b"X" * len(self.contents[1])
+        self.storage.save(self.new[1], ContentFile(conflict))
+
+        out, err = io.StringIO(), io.StringIO()
+        with self.assertRaisesMessage(CommandError, "1 conflicting destination(s)"):
+            call_command("rekey_public_image_paths", stdout=out, stderr=err)
+        self.assertIn("CONFLICT: target exists with different content", out.getvalue())
+        self.assertIn(f"CONFLICT image {self.images[1].pk}: {self.new[1]}", err.getvalue())
         self.assertEqual(self._names(), self.old)
+
+        out, err = io.StringIO(), io.StringIO()
+        with self.assertRaisesMessage(CommandError, "1 conflicting destination(s)"):
+            call_command("rekey_public_image_paths", "--commit", stdout=out, stderr=err)
+        self.assertIn(f"CONFLICT image {self.images[1].pk}: {self.new[1]}", err.getvalue())
+        self.assertIn("Re-keyed 1 image(s).", out.getvalue())
+        self.assertEqual(self._names(), [self.new[0], self.old[1]])
+        self.assertEqual(self._read(self.new[1]), conflict)
         for old in self.old:
             self.assertTrue(self.storage.exists(old))
+
+    def test_corrupt_same_size_copy_never_updates_rows(self):
+        def corrupt(storage, old, new):
+            storage.save(new, ContentFile(b"X" * storage.size(old)))
+        with mock.patch.object(rekey, "_read_and_save", side_effect=corrupt):
+            with self.assertRaisesMessage(CommandError, "wrong content"):
+                self._run("--commit")
+        self.assertEqual(self._names(), self.old)
 
     def test_a_db_failure_rolls_back_every_row_and_keeps_old_objects(self):
         # Another writer changes the second row between plan and update.
@@ -178,12 +204,10 @@ class RekeyPublicImagePathsTests(TestCase):
         for old in self.old:
             self.assertTrue(self.storage.exists(old))
 
-    def test_a_failed_delete_is_reported_not_raised(self):
-        with mock.patch.object(type(self.storage), "delete", side_effect=OSError("denied")):
-            out, err = self._run("--commit")
-        self.assertIn("Re-keyed 2 image(s).", out)
-        self.assertIn("could not delete", err)
-        self.assertEqual(self._names(), self.new)
+    def test_commit_never_deletes_objects(self):
+        with mock.patch.object(type(self.storage), "delete") as delete:
+            self._run("--commit")
+        delete.assert_not_called()
 
     def test_an_image_without_a_portal_is_skipped(self):
         EventImage.objects.filter(pk=self.images[0].pk).update(image="x/a.png")
@@ -192,6 +216,80 @@ class RekeyPublicImagePathsTests(TestCase):
         out, _ = self._run()
         self.assertIn("SKIP", out)
         self.assertIn("0 image(s) to re-key.", out)
+
+
+class PurgeOldTests(_RekeyFixture):
+    """--purge-old: the explicit, separate step that deletes the legacy objects
+    the re-key keeps. Inherits the fixture (two images on old-style keys)."""
+
+    def _purge(self, *args):
+        return self._run("--purge-old", *args)
+
+    def test_legacy_key_is_rederived_from_the_current_key_and_the_internal_slug(self):
+        self._run("--commit")
+        for img, old, new in zip(self.images, self.old, self.new):
+            self.assertEqual(rekey.legacy_key(new, img.event_id, self.event.slug), old)
+        # Not in the current format for this event -> no guess.
+        self.assertIsNone(rekey.legacy_key(self.old[0], self.event.pk, self.event.slug))
+        self.assertIsNone(rekey.legacy_key("home-strip/a.jpg", self.event.pk, self.event.slug))
+        self.assertIsNone(rekey.legacy_key(self.new[0], self.event.pk + 1, self.event.slug))
+
+    def test_dry_run_deletes_nothing_and_reports_counts(self):
+        self._run("--commit")
+        with mock.patch.object(type(self.storage), "delete") as delete:
+            out, _ = self._purge()
+        delete.assert_not_called()
+        self.assertIn("2 legacy object(s) to delete", out)
+        for old in self.old:
+            self.assertIn(f"would delete {old}", out)
+            self.assertTrue(self.storage.exists(old))
+        self.assertIn("to_delete=2 legacy_not_found=0 not_rekeyed_yet=0", out)
+        self.assertIn("Dry run: nothing deleted.", out)
+
+    def test_commit_deletes_only_legacy_keys_whose_new_key_exists(self):
+        # Image 0 re-keyed; image 1 not yet (still on its legacy key, which is
+        # its CURRENT key and must survive).
+        self._run("--commit", "--limit", "1")
+        # A re-keyed row whose new object has vanished keeps its legacy object.
+        other = EventImage.objects.create(event=self.event, image=_png("c.png"))
+        other_old = _old_style(other, b"third")
+        other_new = EventImage._meta.get_field("image").generate_filename(other, other_old.rsplit("/", 1)[1])
+        EventImage.objects.filter(pk=other.pk).update(image=other_new)
+
+        out, err = self._purge("--commit")
+
+        self.assertIn("Deleted 1 legacy object(s).", out)
+        self.assertFalse(self.storage.exists(self.old[0]))
+        self.assertEqual(self._read(self.new[0]), self.contents[0])
+        self.assertEqual(self._read(self.old[1]), self.contents[1])
+        self.assertTrue(self.storage.exists(other_old))
+        self.assertIn(f"KEEP current key missing from storage: {other.pk}", err)
+        self.assertIn("to_delete=1 legacy_not_found=0 not_rekeyed_yet=1 current_missing=1", out)
+        self.assertEqual(self._names(), [self.new[0], self.old[1]])
+
+    def test_purge_is_idempotent(self):
+        self._run("--commit")
+        self._purge("--commit")
+        for old, new, content in zip(self.old, self.new, self.contents):
+            self.assertFalse(self.storage.exists(old))
+            self.assertEqual(self._read(new), content)
+        with mock.patch.object(type(self.storage), "delete") as delete:
+            out, _ = self._purge("--commit")
+        delete.assert_not_called()
+        self.assertIn("0 legacy object(s) to delete", out)
+        self.assertIn("to_delete=0 legacy_not_found=2", out)
+
+    def test_purge_before_any_rekey_deletes_nothing(self):
+        out, _ = self._purge("--commit")
+        self.assertIn("to_delete=0 legacy_not_found=0 not_rekeyed_yet=2", out)
+        for old in self.old:
+            self.assertTrue(self.storage.exists(old))
+
+    def test_purge_limit(self):
+        self._run("--commit")
+        out, _ = self._purge("--commit", "--limit", "1")
+        self.assertIn("Deleted 1 legacy object(s).", out)
+        self.assertEqual(sum(self.storage.exists(o) for o in self.old), 1)
 
 
 class ServerSideCopyTests(TestCase):

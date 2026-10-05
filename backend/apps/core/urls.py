@@ -37,9 +37,10 @@ both hardcode ``method="POST"`` and would need a GET variant.
 
 from django.urls import path
 
-from . import file_views
+from . import file_views, public_views
 
 urlpatterns = [
+    path("public/home-strip/", public_views.home_strip, name="home_strip"),
     # GET — mint a 60s signed URL for one private file, after an ownership check.
     path("files/<str:file_type>/<str:obj_id>/", file_views.mint_file_url, name="mint_file_url"),
 ]

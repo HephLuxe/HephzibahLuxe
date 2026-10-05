@@ -851,3 +851,144 @@ is refused outright — clear or unmark those first.
   "Tips & gotchas" section — start there before reading code. The route list is
   `docs/API_CONTRACT.md`; the end-to-end manual test journey is
   `POSTMAN_TEST_DATA_V3.md` at the repo root.
+
+
+## Decorative homepage strip
+
+Manage images, alt text, order and publication in admin → Core → Home strip images.
+Uploads there go through the same 10MB / JPEG-PNG-WEBP ceiling as event galleries
+(a refusal is a form error, not a 500). `GET /api/v1/public/home-strip/` is anonymous
+(no JWT), uses the portfolio throttle, and returns a bare list of
+`{image: absoluteURL, alt_text, sort_order}` ordered by sort order, then creation time
+and UUID. Unpublished rows are excluded; no response cache. The images live on the
+PUBLIC media storage (`select_public_media_storage`, same as event galleries), so on
+prod `image` is the unsigned R2 custom-domain URL, serialized exactly like a
+portfolio image.
+
+`import_home_strip` loads the original six assets (verified at commit `784b6dc`). It is
+a dry run unless `--apply`. `--source-root` is the frontend's `public/` directory
+(default `../frontend/public`). All six files are validated before any write. Stable
+import keys preserve existing rows, including admin edits, on reruns. New imports are
+published with empty decorative alt text and order 0–5. No event galleries are
+modified and no rows or files are deleted.
+
+**Where the files go is decided by the env it runs under.** With R2 on, the public
+bucket. With `USE_LOCAL_MEDIA=True` (and R2 off), `backend/media/`. With **neither**,
+the storage is in-memory: rows are written but the files vanish when the process exits,
+so every image 404s. Never run it that way against a database you care about.
+
+Local dev (`.env.dev` has `USE_LOCAL_MEDIA=True`):
+
+```bash
+DJANGO_ENV_FILE=.env.dev DATABASE_URL=postgres://jasonojulari@localhost:5432/hephluxe_dev .venv/bin/python manage.py import_home_strip
+DJANGO_ENV_FILE=.env.dev DATABASE_URL=postgres://jasonojulari@localhost:5432/hephluxe_dev .venv/bin/python manage.py import_home_strip --apply
+```
+
+Prod: run it **from a dev machine** (the deployed service has no `frontend/` checkout),
+against the prod DB and R2, after the deploy that adds `core.0002_homestripimage`. The
+exact commands are step 4 of "Portfolio go-live" below.
+
+
+## Portfolio go-live (prod, one-time, in this order)
+
+Four one-time jobs: deploy the backend, re-key the gallery objects, align the three
+real events with the static site, and import the homepage strip. Then, after a grace
+period, purge the old objects. Everything below runs from `backend/` on a dev machine
+with the **production** env file (`backend/.env`: Neon `DATABASE_URL`, Upstash
+`CACHE_REDIS_URL`, the R2 keys and `R2_PUBLIC_URL`/`R2_PUBLIC_BUCKET_NAME`). Read the
+warning in "Post-deploy checklist & commands" about pointing at the wrong env first.
+
+```bash
+cd backend
+export DJANGO_ENV_FILE=.env          # PRODUCTION
+export WEB=https://api.hephzibahluxe.com
+```
+
+**0. Pre-flight: the public storage must be R2.** If this prints `InMemoryStorage` or
+`FileSystemStorage`, STOP: uploads would go to RAM or to this laptop, not to R2.
+
+```bash
+.venv/bin/python manage.py shell -c "from apps.events.models import EventImage; from apps.core.models import HomeStripImage; print(type(EventImage._meta.get_field('image').storage).__name__, type(HomeStripImage._meta.get_field('image').storage).__name__)"
+# want: _PublicMediaStorage _PublicMediaStorage
+```
+
+**1. Deploy this backend commit.** Push to `main`. The web service's build command runs
+`migrate --noinput`, which applies `core.0002_homestripimage` (one new table, no data
+change). Then:
+
+```bash
+.venv/bin/python manage.py showmigrations core     # [X] 0002_homestripimage
+curl -sS $WEB/health/ready/                        # {"status":"ok"}
+curl -sS $WEB/api/v1/public/home-strip/            # []
+```
+
+**2. Re-key gallery objects** (removes the client's name from public image URLs; keeps
+the old objects):
+
+```bash
+.venv/bin/python manage.py rekey_public_image_paths                       # dry run: expect 51 image(s), all [will copy], exit 0
+.venv/bin/python manage.py rekey_public_image_paths --commit --limit 1    # canary
+curl -sS $WEB/api/v1/portfolio/events/ | head -c 600                      # page still loads
+.venv/bin/python manage.py rekey_public_image_paths --commit              # the remaining 50
+.venv/bin/python manage.py rekey_public_image_paths                       # expect 0 image(s) to re-key
+```
+
+Any `CONFLICT` line on stderr means a destination already holds different bytes: the
+command exits non-zero, that row stays on its old key, and the rest are moved. Inspect
+both objects in the bucket before doing anything else.
+
+**3. Align the portfolio** (reorders, covers, the 34 uploads, public slugs
+`golden-50th` / `intimate-85th` / `msme-forum`, day labels "Event No. 1"/"Event No. 2"
+and slugs `thanksgiving-gathering` / `celebration-night`, unpublishes the old intimate
+`event_cover.jpg`). The plan is `apps/events/data/portfolio_alignment.json`; this
+replaces `attach_static_portfolio` on prod, so do not run that as well.
+
+```bash
+.venv/bin/python manage.py apply_portfolio_alignment --images-root ../frontend/public            # dry run
+.venv/bin/python manage.py apply_portfolio_alignment --images-root ../frontend/public --commit
+.venv/bin/python manage.py apply_portfolio_alignment --images-root ../frontend/public            # expect "Already aligned"
+```
+
+The dry run must print `State check: prod matches the plan's before state exactly.`
+and `34` lines with `sha256 OK`. Any `MISMATCH` line means prod changed since the plan
+was computed (someone edited a gallery in the admin): it exits non-zero and refuses.
+Do not edit the plan to force it; recompute it. The order of 2 and 3 does not matter
+(the plan recognises both the old and the re-keyed storage keys), but run 2 first as
+listed. If the commit's DB step fails, nothing in the DB changed and the uploaded
+objects are listed as `ORPHAN` on stderr; a re-run reuses them.
+
+**4. Import the homepage strip** into prod from this checkout:
+
+```bash
+.venv/bin/python manage.py import_home_strip --source-root /Users/jasonojulari/Desktop/hephzibah-luxe/frontend/public            # dry run: 6 x "Would create"
+.venv/bin/python manage.py import_home_strip --source-root /Users/jasonojulari/Desktop/hephzibah-luxe/frontend/public --apply    # "Created 6 images."
+```
+
+**5. Verify.**
+
+```bash
+curl -sS $WEB/api/v1/public/home-strip/                         # 6 items, sort_order 0-5, image = R2 custom domain URLs
+curl -sS $WEB/api/v1/portfolio/events/                          # slugs golden-50th, intimate-85th, msme-forum
+curl -sS $WEB/api/v1/portfolio/events/golden-50th/              # cover photoshootsixs; days pre-birthday-photoshoot, thanksgiving-gathering, celebration-night
+curl -sS $WEB/api/v1/portfolio/events/intimate-85th/
+curl -sS $WEB/api/v1/portfolio/events/msme-forum/
+curl -sS -o /dev/null -w '%{http_code}\n' "$WEB/api/v1/portfolio/events/a-golden-50th-an-intimate-two-day-celebration-of-family-faith-joy/"   # 404: the old public slug is gone
+curl -sSI "<one image URL from the responses above>"            # 200 from the R2 custom domain; the path has no client name
+```
+
+**6. Later (after the grace period, e.g. two weeks): purge the old objects.** The
+legacy key of each image is re-derived from its current key plus the event's internal
+slug. One is deleted only if the current key exists in storage and the legacy object
+exists.
+
+```bash
+.venv/bin/python manage.py rekey_public_image_paths --purge-old                     # dry run: counts, "would delete" lines
+.venv/bin/python manage.py rekey_public_image_paths --purge-old --commit --limit 1  # canary
+.venv/bin/python manage.py rekey_public_image_paths --purge-old --commit
+.venv/bin/python manage.py rekey_public_image_paths --purge-old                     # expect to_delete=0
+```
+
+Expected counts on the first dry run: `to_delete=51 legacy_not_found=34` (the 34 are
+the alignment uploads, which never had a legacy key). `current_missing` must be 0; any
+`KEEP` line on stderr is an object it refused to delete. Re-run the step 5 curls
+afterwards.
