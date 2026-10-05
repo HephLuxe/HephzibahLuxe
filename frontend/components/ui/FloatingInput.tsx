@@ -5,11 +5,14 @@ import { useState, InputHTMLAttributes } from "react";
 interface FloatingInputProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
   required?: boolean;
+  /** Fixed text shown inside the field before the value (e.g. a currency sign). Appears once the label floats. */
+  prefix?: string;
 }
 
 export default function FloatingInput({
   label,
   required,
+  prefix,
   value,
   onChange,
   type = "text",
@@ -26,9 +29,19 @@ export default function FloatingInput({
         onChange={onChange}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className="w-full h-[60px] border border-[#778472] bg-transparent px-4 pt-5 pb-2 font-sans font-normal text-[16px] leading-[24px] text-primary outline-none transition-colors focus:border-primary"
+        className={`w-full h-[60px] border border-[#778472] bg-transparent pr-4 ${prefix ? "pl-8" : "pl-4"} pt-5 pb-2 font-sans font-normal text-[16px] leading-[24px] text-primary outline-none transition-colors focus:border-primary`}
         {...rest}
       />
+      {prefix && (
+        <span
+          aria-hidden="true"
+          className={`absolute left-4 top-px bottom-px pt-5 pb-2 flex items-center pointer-events-none font-sans font-normal text-[16px] leading-[24px] text-[#778472] transition-opacity duration-200 ${
+            isFloating ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          {prefix}
+        </span>
+      )}
       <label
         className={`absolute left-4 pointer-events-none transition-all duration-200 font-sans font-light ${
           isFloating

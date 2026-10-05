@@ -5,17 +5,14 @@ import Image from "next/image";
 import FloatingInput from "@/components/ui/FloatingInput";
 import FloatingPasswordInput from "@/components/ui/FloatingPasswordInput";
 import ClientPortalLayout from "./ClientPortalLayout";
+import { checkPasswordRules } from "@/lib/password-rules";
 
 export default function ClientPortalSignUp() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
 
-    const has8Chars = password.length >= 8;
-    const hasUppercase = /[A-Z]/.test(password);
-    const hasSpecialOrNumber = /[^A-Za-z]/.test(password);
-
-    const allRulesMet = has8Chars && hasUppercase && hasSpecialOrNumber;
+    const { results: ruleResults, allMet: allRulesMet } = checkPasswordRules(password);
     const passwordsMatch = password.length > 0 && password === confirmPassword;
     const canSubmit = email && allRulesMet && passwordsMatch;
 
@@ -63,9 +60,9 @@ export default function ClientPortalSignUp() {
                 </div>
 
                 <ul className="mt-5 space-y-2 sm:space-y-2.5 md:space-y-3">
-                    <Rule met={has8Chars} label="Use 8 or more characters" />
-                    <Rule met={hasUppercase} label="One uppercase character" />
-                    <Rule met={hasSpecialOrNumber} label="One special character or 1 number" />
+                    {ruleResults.map(({ rule, met }) => (
+                        <Rule key={rule.id} met={met} label={rule.label} />
+                    ))}
                 </ul>
 
                 <div className="mt-8 flex justify-end">

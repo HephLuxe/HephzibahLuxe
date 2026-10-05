@@ -52,19 +52,19 @@
     transform: translateX(0);
   }
   to {
-    /* Mobile: 5 × 200px + 5 × 8px gap = 1040px */
-    transform: translateX(-1040px);
+    /* One complete copy, including the gap before its duplicate. */
+    transform: translateX(calc(var(--strip-count, 5) * -208px));
   }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1025px) {
   @keyframes scroll-x {
     from {
       transform: translateX(0);
     }
     to {
-      /* Desktop: 5 × 360px + 5 × 8px gap = 1840px */
-      transform: translateX(-1840px);
+      /* Matches the lg tile width (360px) plus the 8px gap. */
+      transform: translateX(calc(var(--strip-count, 5) * -368px));
     }
   }
 }

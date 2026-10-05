@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react";
 import Image from "next/image";
+import type { GalleryImage } from "@/lib/portfolio";
 
 interface GalleryContextValue {
     openAt: (image: string) => void;
@@ -15,7 +16,7 @@ export function useGallery() {
 
 interface GalleryProviderProps {
     children: ReactNode;
-    images: string[]; // Full flattened list, in display order
+    images: GalleryImage[]; // Full flattened list, in display order
 }
 
 export function GalleryProvider({ children, images }: GalleryProviderProps) {
@@ -23,7 +24,7 @@ export function GalleryProvider({ children, images }: GalleryProviderProps) {
 
     const openAt = useCallback(
         (image: string) => {
-            const idx = images.indexOf(image);
+            const idx = images.findIndex((img) => img.src === image);
             if (idx !== -1) setLightboxIndex(idx);
         },
         [images]
@@ -151,8 +152,8 @@ export function GalleryProvider({ children, images }: GalleryProviderProps) {
                         className="relative w-[98vw] h-[92vh] sm:w-[95vw] sm:h-[90vh] md:w-[92vw] md:h-[88vh] lg:w-[85vw] lg:h-[85vh]"
                     >
                         <Image
-                            src={images[lightboxIndex]}
-                            alt=""
+                            src={images[lightboxIndex].src}
+                            alt={images[lightboxIndex].alt}
                             fill
                             className="object-contain pointer-events-none select-none"
                             sizes="95vw"

@@ -10,6 +10,8 @@ interface DateRangePickerProps {
   endDate: Date | null;
   onStartDateChange: (date: Date | null) => void;
   onEndDateChange: (date: Date | null) => void;
+  /** Earliest selectable day (compared by local calendar date). Earlier days are disabled. */
+  minDate?: Date;
 }
 
 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -22,6 +24,7 @@ export default function DateRangePicker({
   endDate,
   onStartDateChange,
   onEndDateChange,
+  minDate,
 }: DateRangePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
@@ -82,6 +85,12 @@ export default function DateRangePicker({
     }
   }
 
+  // Disabled: before minDate, or before the start while the end is being picked.
+  // Days in the grid are local midnights, so minDate is floored to one too.
+  const minDay = minDate ? new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate()) : null;
+  const isDateDisabled = (date: Date) =>
+    (minDay !== null && date < minDay) || (isMultiDay && !!startDate && !endDate && date < startDate);
+
   const isDateSelected = (date: Date | null) => {
     if (!date) return false;
     if (startDate && date.toDateString() === startDate.toDateString()) return true;
@@ -130,11 +139,13 @@ export default function DateRangePicker({
               key={i}
               type="button"
               onClick={() => handleDateClick(date)}
-              disabled={!date}
+              disabled={!date || isDateDisabled(date)}
               className={`flex items-center justify-center font-sans font-medium rounded-full transition-colors w-9 h-9 sm:w-10 sm:h-10 md:w-11 md:h-11 lg:w-10 lg:h-10 xl:w-11 xl:h-11 2xl:w-12 2xl:h-12 text-[13px] sm:text-sm md:text-[15px] lg:text-sm xl:text-[15px] 2xl:text-[16px] ${
                 !date ? "invisible" : ""
               } ${
-                isDateSelected(date)
+                date && isDateDisabled(date)
+                  ? "text-primary opacity-30 cursor-not-allowed"
+                  : isDateSelected(date)
                   ? "bg-primary text-background"
                   : isDateInRange(date)
                   ? "bg-primary/10 text-primary"

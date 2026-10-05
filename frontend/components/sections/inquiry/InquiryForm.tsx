@@ -8,12 +8,84 @@ import FloatingSelect from "@/components/ui/FloatingSelect";
 import FloatingTextarea from "@/components/ui/FloatingTextarea";
 import CountryPicker from "@/components/ui/CountryPicker";
 import DateRangePicker from "@/components/ui/DateRangePicker";
+import { ApiError, apiFetch, GENERIC_ERROR_MESSAGE } from "@/lib/client-api";
 
 interface InquiryFormProps {
   onSubmitted: (firstName: string, email: string) => void;
 }
 
-const FORMSPREE_ENDPOINT = process.env.NEXT_PUBLIC_FORMSPREE_ENDPOINT;
+// Display label -> backend value. Values must match the backend choices exactly:
+// InquiryForm.CONTACT_MODE and events.Event.EVENT_TYPE (backend/apps/...).
+const CONTACT_MODE_OPTIONS: Record<string, string> = {
+  "Email Address": "Email",
+  "Phone Number": "Phone Number",
+};
+
+const EVENT_TYPE_OPTIONS: Record<string, string> = {
+  Wedding: "Wedding",
+  Birthday: "Birthday",
+  "Corporate Event": "Corporate",
+  "Social Event (e.g., Proposals, Naming Ceremonies, Private Dinners, etc.)": "Social Events",
+  Other: "Others",
+};
+
+// Labels used in the error summary, keyed by backend field name.
+const FIELD_LABELS: Record<string, string> = {
+  first_name: "First name",
+  last_name: "Last name",
+  email: "Email address",
+  phone_number: "Phone number",
+  contact_mode: "Preferred method of contact",
+  event_type: "Event type",
+  preferred_start_date: "Start date",
+  preferred_end_date: "End date",
+  desired_location: "Location",
+  budget: "Budget",
+  details: "Event details",
+};
+
+type SubmitError = { message: string; fieldErrors: { field: string; messages: string[] }[] };
+
+// YYYY-MM-DD from the LOCAL calendar date. toISOString() converts to UTC first,
+// which moves the date by a day for anyone east or west of UTC near midnight.
+function toLocalISODate(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+// The backend stores phone_number in a CharField(max_length=20) as
+// `${dialCode} ${phone}`, so the number gets whatever the dial code and the
+// joining space leave over (15 for "+234").
+const PHONE_MAX_TOTAL = 20;
+
+function phoneMaxLength(dialCode: string): number {
+  return PHONE_MAX_TOTAL - dialCode.length - 1;
+}
+
+// Digits and spaces only, cut to the room left beside the dial code. Not a
+// native maxLength: that truncates a pasted "803-123-4567" before the dashes
+// are stripped, losing digits.
+function sanitizePhone(value: string, dialCode: string): string {
+  return value.replace(/[^\d ]/g, "").slice(0, phoneMaxLength(dialCode));
+}
+
+// The backend stores budget as a single decimal (max_digits=14,
+// decimal_places=2), so the field takes whole naira only: at most 12 digits.
+const BUDGET_MAX_DIGITS = 12;
+
+function formatBudget(digits: string): string {
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+// Position in `formatted` just after its `digitCount`-th digit.
+function caretAfterDigits(formatted: string, digitCount: number): number {
+  if (digitCount <= 0) return 0;
+  let seen = 0;
+  for (let i = 0; i < formatted.length; i++) {
+    if (/\d/.test(formatted[i]) && ++seen === digitCount) return i + 1;
+  }
+  return formatted.length;
+}
 
 export default function InquiryForm({ onSubmitted }: InquiryFormProps) {
   const [firstName, setFirstName] = useState("");
@@ -28,11 +100,11 @@ export default function InquiryForm({ onSubmitted }: InquiryFormProps) {
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [location, setLocation] = useState("");
-  const [budget, setBudget] = useState("");
+  const [budget, setBudget] = useState(""); // digits only, e.g. "5000000"
   const [details, setDetails] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<SubmitError | null>(null);
 
   const allFilled =
     firstName &&
@@ -46,62 +118,78 @@ export default function InquiryForm({ onSubmitted }: InquiryFormProps) {
     budget &&
     details;
 
+  // Keeps only digits, shows them with thousands separators, and puts the caret
+  // back after the same digit it followed before reformatting.
+  function handleBudgetChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const input = e.target;
+    // Whole naira only: drop a trailing fraction (e.g. a pasted "1,250,000.00")
+    // so its digits are not read as extra naira.
+    const raw = input.value.replace(/\.\d{0,2}(?=\D*$)/, "");
+    const caret = Math.min(input.selectionStart ?? raw.length, raw.length);
+    let digits = raw.replace(/\D/g, "");
+    let digitsBefore = raw.slice(0, caret).replace(/\D/g, "").length;
+
+    // Backspace over a comma would otherwise do nothing: drop the digit before it.
+    const inputType = (e.nativeEvent as InputEvent).inputType;
+    if (inputType === "deleteContentBackward" && digits === budget && digitsBefore > 0) {
+      digits = digits.slice(0, digitsBefore - 1) + digits.slice(digitsBefore);
+      digitsBefore -= 1;
+    }
+
+    const trimmed = digits.replace(/^0+(?=\d)/, "");
+    digitsBefore = Math.max(digitsBefore - (digits.length - trimmed.length), 0);
+    let next = trimmed;
+    if (next.length > BUDGET_MAX_DIGITS) {
+      // Over the limit (typing or pasting): keep what was there, caret where it was.
+      digitsBefore = Math.max(digitsBefore - (next.length - budget.length), 0);
+      next = budget;
+    }
+
+    setBudget(next);
+    const nextCaret = caretAfterDigits(formatBudget(next), digitsBefore);
+    requestAnimationFrame(() => {
+      if (document.activeElement === input) input.setSelectionRange(nextCaret, nextCaret);
+    });
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!allFilled || submitting) return;
-
-    if (!FORMSPREE_ENDPOINT) {
-      setSubmitError("Something went wrong submitting your inquiry. Please try again.");
-      return;
-    }
+    if (!allFilled || submitting || !startDate) return;
 
     setSubmitting(true);
     setSubmitError(null);
 
-    // Payload sent to Formspree. Field names become the labels in your Formspree dashboard and email notifications.
+    // A single-day event has no end date in the picker; the backend requires one.
+    const start = toLocalISODate(startDate);
+    const end = endDate ? toLocalISODate(endDate) : start;
+
     const payload = {
-      "First Name": firstName,
-      "Last Name": lastName,
-      "Email": email,
-      "Phone": `${dialCode} ${phone}`,
-      "Country": countryCode,
-      "Preferred Contact Method": contactMethod,
-      "Event Type": eventType,
-      "Preferred Start Date": startDate ? startDate.toISOString().split("T")[0] : "",
-      "Preferred End Date": endDate ? endDate.toISOString().split("T")[0] : "",
-      "Location": location,
-      "Budget Range": budget,
-      "Additional Details": details,
-      // Formspree special fields
-      _subject: `New inquiry from ${firstName} ${lastName} — ${eventType}`,
-      _replyto: email,
+      first_name: firstName.trim(),
+      last_name: lastName.trim(),
+      email: email.trim(),
+      phone_number: `${dialCode} ${phone.trim()}`,
+      contact_mode: CONTACT_MODE_OPTIONS[contactMethod],
+      event_type: EVENT_TYPE_OPTIONS[eventType],
+      preferred_start_date: start,
+      preferred_end_date: end,
+      desired_location: location.trim(),
+      ...(budget ? { budget } : {}),
+      details,
     };
 
     try {
-      const response = await fetch(FORMSPREE_ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        const message =
-          data?.errors?.[0]?.message ||
-          "Something went wrong submitting your inquiry. Please try again.";
-        throw new Error(message);
-      }
-
+      await apiFetch("/api/v1/inquiries/", { method: "POST", json: payload });
       onSubmitted(firstName, email);
     } catch (err) {
-      setSubmitError(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong submitting your inquiry. Please try again."
-      );
+      if (err instanceof ApiError) {
+        const fieldErrors = Object.entries(err.fieldErrors).map(([field, messages]) => ({ field, messages }));
+        setSubmitError({
+          message: fieldErrors.length ? "Please check the following and try again:" : err.detail,
+          fieldErrors,
+        });
+      } else {
+        setSubmitError({ message: GENERIC_ERROR_MESSAGE, fieldErrors: [] });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -172,6 +260,7 @@ export default function InquiryForm({ onSubmitted }: InquiryFormProps) {
                   onChange={(code, dial) => {
                     setCountryCode(code);
                     setDialCode(dial);
+                    setPhone((p) => sanitizePhone(p, dial));
                   }}
                 />
                 <div className="flex-1">
@@ -179,15 +268,16 @@ export default function InquiryForm({ onSubmitted }: InquiryFormProps) {
                     label="Your Phone Number"
                     type="tel"
                     required
+                    inputMode="tel"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => setPhone(sanitizePhone(e.target.value, dialCode))}
                   />
                 </div>
               </div>
               <FloatingSelect
                 label="Your Preferred Method of Contact"
                 required
-                options={["Email Address", "Phone Number"]}
+                options={Object.keys(CONTACT_MODE_OPTIONS)}
                 value={contactMethod}
                 onChange={setContactMethod}
               />
@@ -208,12 +298,7 @@ export default function InquiryForm({ onSubmitted }: InquiryFormProps) {
               <FloatingSelect
                 label="What Type of Event Are You Planning?"
                 required
-                options={[
-                  "Wedding",
-                  "Birthday",
-                  "Corporate Event",
-                  "Other Social Event (e.g., Proposals, Naming Ceremonies, Private Dinners, etc.)",
-                ]}
+                options={Object.keys(EVENT_TYPE_OPTIONS)}
                 value={eventType}
                 onChange={setEventType}
               />
@@ -224,6 +309,7 @@ export default function InquiryForm({ onSubmitted }: InquiryFormProps) {
                 endDate={endDate}
                 onStartDateChange={setStartDate}
                 onEndDateChange={setEndDate}
+                minDate={new Date()}
               />
               <FloatingInput
                 label="What Is Your Desired Location (State, Country)?"
@@ -232,10 +318,13 @@ export default function InquiryForm({ onSubmitted }: InquiryFormProps) {
                 onChange={(e) => setLocation(e.target.value)}
               />
               <FloatingInput
-                label="What Is Your Budget Range?"
+                label="What Is Your Budget?"
                 required
-                value={budget}
-                onChange={(e) => setBudget(e.target.value)}
+                prefix="₦"
+                inputMode="numeric"
+                autoComplete="off"
+                value={formatBudget(budget)}
+                onChange={handleBudgetChange}
               />
               <FloatingTextarea
                 label="Share a few details about your event, or add anything else you'd like us to know."
@@ -247,11 +336,23 @@ export default function InquiryForm({ onSubmitted }: InquiryFormProps) {
             </div>
 
             {/* Error message */}
-            {submitError && (
-              <p className="mt-3 mb-1 font-sans font-light text-primary text-[13px] leading-[20px] sm:text-[14px] sm:leading-[22px]">
-                Something went wrong submitting your inquiry. Please try again.
-              </p>
-            )}
+            <div role="alert" className={`${submitError ? "mt-3 mb-1" : ""} font-sans font-light text-primary text-[13px] leading-[20px] sm:text-[14px] sm:leading-[22px]`}>
+              {submitError && (
+                <>
+                  <p>{submitError.message}</p>
+                  {submitError.fieldErrors.length > 0 && (
+                    <ul className="mt-1 list-disc pl-5">
+                      {submitError.fieldErrors.map(({ field, messages }) => (
+                        <li key={field}>
+                          {FIELD_LABELS[field] ? `${FIELD_LABELS[field]}: ` : ""}
+                          {messages.join(" ")}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </div>
 
             {/* Bottom row — row layout starts at md (iPad) instead of lg */}
             <div className="mt-8 sm:mt-10 md:mt-12 flex flex-col md:flex-row md:items-end md:justify-between gap-6">

@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import type { PortfolioEvent } from "@/data/portfolio";
+import { formatLocationYear, type PortfolioEvent } from "@/lib/portfolio";
 
 export default function MultiDayEvent({ event }: { event: PortfolioEvent }) {
   return (
@@ -19,7 +19,7 @@ export default function MultiDayEvent({ event }: { event: PortfolioEvent }) {
 
         {/* Location + year */}
         <p className="mt-10 sm:mt-11 md:mt-12 lg:mt-12 xl:mt-14 font-sans font-light leading-[184%] tracking-[-0.03em] uppercase text-primary text-[12px] sm:text-[13px] md:text-[14px] lg:text-[14px] xl:text-[15px] 2xl:text-[16px]">
-          {event.location} — {event.year}
+          {formatLocationYear(event)}
         </p>
 
         {/* Title */}
@@ -51,13 +51,15 @@ export default function MultiDayEvent({ event }: { event: PortfolioEvent }) {
                 className="group block"
               >
                 <div className="relative w-full aspect-[3/4] overflow-hidden">
-                  <Image
-                    src={sub.image}
-                    alt={sub.title}
-                    fill
-                    className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    sizes="(max-width: 1024px) 50vw, 33vw"
-                  />
+                  {sub.image && (
+                    <Image
+                      src={sub.image}
+                      alt={sub.title}
+                      fill
+                      className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      sizes="(max-width: 1024px) 50vw, 33vw"
+                    />
+                  )}
                 </div>
 
                 <p className="mt-5 font-sans font-light leading-[184%] tracking-[-0.03em] uppercase text-primary text-[13px] sm:text-[14px] md:text-[14px] lg:text-[15px] xl:text-[16px] 2xl:text-[17px]">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, TextareaHTMLAttributes } from "react";
+import { TextareaHTMLAttributes } from "react";
 
 interface FloatingTextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label: string;
@@ -16,8 +16,6 @@ export default function FloatingTextarea({
   rows = 6,
   ...rest
 }: FloatingTextareaProps) {
-  const [focused, setFocused] = useState(false);
-
   return (
     <div>
       <label className="block font-sans font-light text-[16px] lg:text-[19px] leading-[25px] text-primary mb-3">
@@ -29,8 +27,6 @@ export default function FloatingTextarea({
         onChange={onChange}
         rows={rows}
         placeholder={placeholder}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
         className="w-full border border-[#778472] bg-transparent px-4 py-3 font-sans font-normal text-[16px] lg:text-[18px] leading-[24px] text-primary outline-none transition-colors focus:border-primary placeholder:text-[#778472] placeholder:font-light resize-y"
         {...rest}
       />

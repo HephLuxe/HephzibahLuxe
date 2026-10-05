@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import type { GalleryRow } from "@/data/portfolio";
+import type { GalleryImage, GalleryRow } from "@/lib/portfolio";
 import { useGallery } from "./GalleryLightbox";
 
 export default function GalleryRowRenderer({ row }: { row: GalleryRow }) {
@@ -23,7 +23,7 @@ export default function GalleryRowRenderer({ row }: { row: GalleryRow }) {
   const images = row.images;
   const count = images.length;
 
-  const renderImage = (src: string, key: number, extraClass = "", sizes = "100vw") => (
+  const renderImage = ({ src, alt }: GalleryImage, key: number, extraClass = "", sizes = "100vw") => (
     <button
       key={key}
       type="button"
@@ -33,7 +33,7 @@ export default function GalleryRowRenderer({ row }: { row: GalleryRow }) {
     >
       <Image
         src={src}
-        alt=""
+        alt={alt}
         fill
         className="object-cover transition-transform duration-500 hover:scale-105"
         sizes={sizes}
@@ -64,8 +64,8 @@ export default function GalleryRowRenderer({ row }: { row: GalleryRow }) {
         }`}
         style={gridStyle}
       >
-        {images.map((src, i) =>
-          renderImage(src, i, isRatioRow ? "h-full" : "aspect-[3/4] lg:aspect-[4/3]", "50vw")
+        {images.map((img, i) =>
+          renderImage(img, i, isRatioRow ? "h-full" : "aspect-[3/4] lg:aspect-[4/3]", "50vw")
         )}
       </div>
     );
@@ -73,9 +73,9 @@ export default function GalleryRowRenderer({ row }: { row: GalleryRow }) {
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 lg:gap-3">
-      {images.map((src, i) =>
+      {images.map((img, i) =>
         renderImage(
-          src,
+          img,
           i,
           `aspect-[3/4] ${count === 3 && i === 2 ? "col-span-2 lg:col-span-1" : ""}`,
           "(max-width: 1024px) 50vw, 33vw"

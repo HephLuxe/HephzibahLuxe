@@ -6,33 +6,47 @@ import Link from "next/link";
 import FloatingInput from "@/components/ui/FloatingInput";
 import FloatingPasswordInput from "@/components/ui/FloatingPasswordInput";
 import ClientPortalLayout from "./ClientPortalLayout";
+import PasswordRuleList from "./PasswordRuleList";
+import { ApiError, apiFetch, GENERIC_ERROR_MESSAGE } from "@/lib/client-api";
+import { checkPasswordRules } from "@/lib/password-rules";
 
-const VALID_EMAIL = "damilareebire@gmail.com";
-const VALID_CODE = "1234";
+// Matches the backend's 6-digit reset code (PasswordResetVerifySerializer).
+const CODE_LENGTH = 6;
 const RESEND_SECONDS = 10;
+const emptyDigits = () => Array<string>(CODE_LENGTH).fill("");
 
 type Step = "email" | "code" | "reset" | "success";
 
+function messageFrom(err: unknown, field?: string): string {
+    if (!(err instanceof ApiError)) return GENERIC_ERROR_MESSAGE;
+    if (field && err.fieldErrors[field]?.length) return err.fieldErrors[field].join(" ");
+    const fieldMessages = Object.values(err.fieldErrors).flat();
+    return fieldMessages.length ? fieldMessages.join(" ") : err.detail;
+}
+
+function requestResetCode(email: string): Promise<unknown> {
+    return apiFetch("/api/v1/auth/password-reset/request/", { method: "POST", json: { email: email.trim() } });
+}
+
 export default function ForgotPassword() {
     const [step, setStep] = useState<Step>("email");
+    const [submitting, setSubmitting] = useState(false);
 
     const [email, setEmail] = useState("");
-    const [emailError, setEmailError] = useState(false);
+    const [emailError, setEmailError] = useState<string | null>(null);
 
-    const [digits, setDigits] = useState<string[]>(["", "", "", ""]);
-    const [codeError, setCodeError] = useState(false);
+    const [digits, setDigits] = useState<string[]>(emptyDigits);
+    const [codeError, setCodeError] = useState<string | null>(null);
     const [secondsLeft, setSecondsLeft] = useState(RESEND_SECONDS);
     const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
+    const [resetError, setResetError] = useState<string | null>(null);
 
-    const has8Chars = newPassword.length >= 8;
-    const hasUppercase = /[A-Z]/.test(newPassword);
-    const hasSpecialOrNumber = /[^A-Za-z]/.test(newPassword);
-    const allRulesMet = has8Chars && hasUppercase && hasSpecialOrNumber;
+    const { allMet: allRulesMet } = checkPasswordRules(newPassword);
     const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
-    const canReset = allRulesMet && passwordsMatch;
+    const canReset = allRulesMet && passwordsMatch && !submitting;
 
     useEffect(() => {
         if (step !== "code") return;
@@ -41,82 +55,121 @@ export default function ForgotPassword() {
         return () => clearInterval(id);
     }, [step, secondsLeft]);
 
-    function handleEmailSubmit(e: React.FormEvent) {
+    // The backend answers the same way whether or not the email has an account,
+    // so this always moves on to the code step with a neutral message. Only a
+    // network failure or rate limit keeps the user here.
+    async function handleEmailSubmit(e: React.FormEvent) {
         e.preventDefault();
-        if (!email) return;
-        if (email.toLowerCase() === VALID_EMAIL.toLowerCase()) {
-            setEmailError(false);
+        if (!email || submitting) return;
+        setSubmitting(true);
+        setEmailError(null);
+        try {
+            await requestResetCode(email);
             setStep("code");
             setSecondsLeft(RESEND_SECONDS);
-            setDigits(["", "", "", ""]);
-            setCodeError(false);
-        } else {
-            setEmailError(true);
+            setDigits(emptyDigits());
+            setCodeError(null);
+        } catch (err) {
+            setEmailError(messageFrom(err, "email"));
+        } finally {
+            setSubmitting(false);
         }
     }
 
     function handleEmailChange(e: React.ChangeEvent<HTMLInputElement>) {
         setEmail(e.target.value);
-        if (emailError) setEmailError(false);
+        if (emailError) setEmailError(null);
     }
 
     const code = digits.join("");
-    const canVerify = code.length === 4;
+    const canVerify = code.length === CODE_LENGTH && !submitting;
 
     function setDigitAt(i: number, value: string) {
         const next = [...digits];
         next[i] = value;
         setDigits(next);
-        if (codeError) setCodeError(false);
+        if (codeError) setCodeError(null);
     }
 
     function handleDigitChange(i: number, raw: string) {
         const cleaned = raw.replace(/\D/g, "").slice(-1);
         setDigitAt(i, cleaned);
-        if (cleaned && i < 3) inputRefs.current[i + 1]?.focus();
+        if (cleaned && i < CODE_LENGTH - 1) inputRefs.current[i + 1]?.focus();
     }
 
     function handleDigitKeyDown(i: number, e: KeyboardEvent<HTMLInputElement>) {
         if (e.key === "Backspace" && !digits[i] && i > 0) inputRefs.current[i - 1]?.focus();
         if (e.key === "ArrowLeft" && i > 0) inputRefs.current[i - 1]?.focus();
-        if (e.key === "ArrowRight" && i < 3) inputRefs.current[i + 1]?.focus();
+        if (e.key === "ArrowRight" && i < CODE_LENGTH - 1) inputRefs.current[i + 1]?.focus();
     }
 
     function handleDigitPaste(e: ClipboardEvent<HTMLInputElement>) {
         e.preventDefault();
-        const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 4);
+        const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, CODE_LENGTH);
         if (!pasted) return;
-        const next = ["", "", "", ""];
+        const next = emptyDigits();
         for (let i = 0; i < pasted.length; i++) next[i] = pasted[i];
         setDigits(next);
-        setCodeError(false);
-        const lastIdx = Math.min(pasted.length, 4) - 1;
+        setCodeError(null);
+        const lastIdx = Math.min(pasted.length, CODE_LENGTH) - 1;
         inputRefs.current[lastIdx]?.focus();
     }
 
-    function handleCodeSubmit(e: React.FormEvent) {
+    async function handleCodeSubmit(e: React.FormEvent) {
         e.preventDefault();
         if (!canVerify) return;
-        if (code === VALID_CODE) {
-            setCodeError(false);
+        setSubmitting(true);
+        setCodeError(null);
+        try {
+            await apiFetch("/api/v1/auth/password-reset/verify/", {
+                method: "POST",
+                json: { email: email.trim(), code },
+            });
             setStep("reset");
-        } else {
-            setCodeError(true);
+        } catch (err) {
+            setCodeError(messageFrom(err, "code"));
+        } finally {
+            setSubmitting(false);
         }
     }
 
-    function handleResend() {
-        if (secondsLeft > 0) return;
-        setSecondsLeft(RESEND_SECONDS);
-        setDigits(["", "", "", ""]);
-        setCodeError(false);
-        inputRefs.current[0]?.focus();
+    async function handleResend() {
+        if (secondsLeft > 0 || submitting) return;
+        setSubmitting(true);
+        setCodeError(null);
+        try {
+            await requestResetCode(email);
+            setSecondsLeft(RESEND_SECONDS);
+            setDigits(emptyDigits());
+            inputRefs.current[0]?.focus();
+        } catch (err) {
+            setCodeError(messageFrom(err, "email"));
+        } finally {
+            setSubmitting(false);
+        }
     }
 
-    function handleResetSubmit(e: React.FormEvent) {
+    async function handleResetSubmit(e: React.FormEvent) {
         e.preventDefault();
         if (!canReset) return;
-        setStep("success");
+        setSubmitting(true);
+        setResetError(null);
+        try {
+            await apiFetch("/api/v1/auth/password-reset/confirm/", {
+                method: "POST",
+                json: {
+                    email: email.trim(),
+                    code,
+                    new_password: newPassword,
+                    confirm_password: confirmPassword,
+                },
+            });
+            setStep("success");
+        } catch (err) {
+            setResetError(messageFrom(err));
+        } finally {
+            setSubmitting(false);
+        }
     }
 
     const timerLabel = `(0:${secondsLeft.toString().padStart(2, "0")})`;
@@ -139,7 +192,7 @@ export default function ForgotPassword() {
                     <h1 className={headingCls}>Forgot Password</h1>
 
                     <p className={`mt-6 sm:mt-7 md:mt-8 lg:mt-8 ${bodyCls}`}>
-                        Please enter the email associated with your Hephzibah Luxe Client Portal. we will send 4 digits code to your email.
+                        Please enter the email associated with your Hephzibah Luxe Client Portal. We will send a 6-digit code to your email.
                     </p>
 
                     {emailError && (
@@ -156,7 +209,7 @@ export default function ForgotPassword() {
                                 className="w-[22px] h-[22px] md:w-[24px] md:h-[24px] flex-shrink-0 mt-0.5"
                             />
                             <p className="font-sans font-medium tracking-[0.0125em] text-primary text-[15px] leading-[24px] sm:text-[16px] sm:leading-[26px] md:text-[17px] md:leading-[28px] lg:text-[12px] lg:leading-[26px] xl:text-[15px] xl:leading-[28px] 2xl:text-[18px] 2xl:leading-[30px]">
-                                Sorry, no client profile associated with this email was found.
+                                {emailError}
                             </p>
                         </div>
                     )}
@@ -174,14 +227,14 @@ export default function ForgotPassword() {
                     <div className="mt-8 flex flex-col items-end gap-3">
                         <button
                             type="submit"
-                            disabled={!email}
-                            className={`${buttonCls} ${email
+                            disabled={!email || submitting}
+                            className={`${buttonCls} ${email && !submitting
                                 ? "bg-secondary border border-secondary hover:bg-background hover:border-primary"
                                 : "bg-[#A8A8A8] border border-[#A8A8A8] cursor-not-allowed"
                                 }`}
                         >
-                            <span className={`${buttonTextCls} ${email ? "text-background group-hover:text-primary" : "text-background"}`}>
-                                Send Code
+                            <span className={`${buttonTextCls} ${email && !submitting ? "text-background group-hover:text-primary" : "text-background"}`}>
+                                {submitting ? "Sending…" : "Send Code"}
                             </span>
                             <span className={buttonArrowWrapperCls}>
                                 <Image src="/icons/whitebuttonarrow.svg" alt="" fill className={`object-contain transition-opacity ${email ? "group-hover:opacity-0" : ""}`} />
@@ -202,11 +255,11 @@ export default function ForgotPassword() {
                     <h1 className={headingCls}>Forgot Password</h1>
 
                     <p className={`mt-6 sm:mt-7 md:mt-8 lg:mt-8 ${bodyCls}`}>
-                        Please check your email. We have sent a code to{" "}
-                        <span className="font-normal">{email}</span>
+                        If an account exists for{" "}
+                        <span className="font-normal">{email}</span>, we have sent a 6-digit code to it. Please check your email.
                     </p>
 
-                    <div className="mt-10 sm:mt-11 md:mt-12 flex justify-center gap-3 sm:gap-3.5 md:gap-4 lg:gap-4 xl:gap-5">
+                    <div className="mt-10 sm:mt-11 md:mt-12 flex justify-center gap-2 sm:gap-3 md:gap-3.5 lg:gap-3 xl:gap-4">
                         {digits.map((digit, i) => (
                             <input
                                 key={i}
@@ -221,7 +274,7 @@ export default function ForgotPassword() {
                                 onKeyDown={(e) => handleDigitKeyDown(i, e)}
                                 onPaste={handleDigitPaste}
                                 aria-label={`Digit ${i + 1}`}
-                                className={`rounded-2xl text-center font-sans font-medium outline-none transition-colors w-[56px] h-[56px] sm:w-[64px] sm:h-[64px] md:w-[72px] md:h-[72px] lg:w-[80px] lg:h-[80px] xl:w-[88px] xl:h-[88px] 2xl:w-[96px] 2xl:h-[96px] text-[26px] sm:text-[28px] md:text-[32px] lg:text-[36px] xl:text-[40px] 2xl:text-[44px] ${codeError
+                                className={`rounded-2xl text-center font-sans font-medium outline-none transition-colors w-[42px] h-[52px] sm:w-[56px] sm:h-[64px] md:w-[64px] md:h-[72px] lg:w-[60px] lg:h-[72px] xl:w-[68px] xl:h-[80px] 2xl:w-[76px] 2xl:h-[88px] text-[22px] sm:text-[26px] md:text-[30px] lg:text-[30px] xl:text-[34px] 2xl:text-[38px] ${codeError
                                     ? "border border-[#D50000] bg-[rgba(213,0,0,0.25)] text-[#D50000]"
                                     : "border border-primary bg-background text-primary focus:border-secondary"
                                     }`}
@@ -230,7 +283,7 @@ export default function ForgotPassword() {
                     </div>
 
                     {codeError && (
-                        <div className="mt-4 flex items-center justify-center gap-2">
+                        <div className="mt-4 flex items-center justify-center gap-2" role="alert">
                             <Image
                                 src="/icons/errorcircle.svg"
                                 alt=""
@@ -239,7 +292,7 @@ export default function ForgotPassword() {
                                 className="w-[16px] h-[16px] md:w-[18px] md:h-[18px] xl:w-[20px] xl:h-[20px]"
                             />
                             <p className="font-sans font-medium leading-[25px] text-[#D50000] text-[14px] sm:text-[15px] md:text-[16px] lg:text-[14px] xl:text-[15px] 2xl:text-[16px]">
-                                The code you entered is incorrect. Please try again
+                                {codeError}
                             </p>
                         </div>
                     )}
@@ -249,7 +302,7 @@ export default function ForgotPassword() {
                         {secondsLeft > 0 ? (
                             <span className="text-[#D50000]">{timerLabel}</span>
                         ) : (
-                            <button type="button" onClick={handleResend} className="underline hover:opacity-70 transition-opacity">
+                            <button type="button" onClick={handleResend} disabled={submitting} className="underline hover:opacity-70 transition-opacity">
                                 Resend
                             </button>
                         )}
@@ -265,7 +318,7 @@ export default function ForgotPassword() {
                                 }`}
                         >
                             <span className={`${buttonTextCls} ${canVerify ? "text-background group-hover:text-primary" : "text-background"}`}>
-                                Verify
+                                {submitting ? "Verifying…" : "Verify"}
                             </span>
                             <span className={buttonArrowWrapperCls}>
                                 <Image src="/icons/whitebuttonarrow.svg" alt="" fill className={`object-contain transition-opacity ${canVerify ? "group-hover:opacity-0" : ""}`} />
@@ -300,11 +353,22 @@ export default function ForgotPassword() {
                         />
                     </div>
 
-                    <ul className="mt-5 space-y-2 sm:space-y-2.5 md:space-y-3">
-                        <Rule met={has8Chars} label="Use 8 or more characters" />
-                        <Rule met={hasUppercase} label="One uppercase character" />
-                        <Rule met={hasSpecialOrNumber} label="One special character or 1 number" />
-                    </ul>
+                    <PasswordRuleList password={newPassword} />
+
+                    {resetError && (
+                        <div className="mt-5 flex items-center gap-2" role="alert">
+                            <Image
+                                src="/icons/errorcircle.svg"
+                                alt=""
+                                width={20}
+                                height={20}
+                                className="w-[16px] h-[16px] md:w-[18px] md:h-[18px] xl:w-[20px] xl:h-[20px] flex-shrink-0"
+                            />
+                            <p className="font-sans font-medium leading-[25px] text-[#D50000] text-[14px] sm:text-[15px] md:text-[16px] lg:text-[14px] xl:text-[15px] 2xl:text-[16px]">
+                                {resetError}
+                            </p>
+                        </div>
+                    )}
 
                     <div className="mt-8 flex justify-end">
                         <button
@@ -316,7 +380,7 @@ export default function ForgotPassword() {
                                 }`}
                         >
                             <span className={`${buttonTextCls} ${canReset ? "text-background group-hover:text-primary" : "text-background"}`}>
-                                Reset Password
+                                {submitting ? "Resetting…" : "Reset Password"}
                             </span>
                             <span className={buttonArrowWrapperCls}>
                                 <Image src="/icons/whitebuttonarrow.svg" alt="" fill className={`object-contain transition-opacity ${canReset ? "group-hover:opacity-0" : ""}`} />
@@ -384,31 +448,5 @@ function SuccessScreen() {
                 </div>
             </div>
         </section>
-    );
-}
-
-function Rule({ met, label }: { met: boolean; label: string }) {
-    return (
-        <li className="flex items-center gap-3 font-sans font-light text-primary text-[14px] sm:text-[15px] md:text-[16px] lg:text-[14px] xl:text-[15px] 2xl:text-[16px]">
-            <span
-                className={`relative inline-block flex-shrink-0 border border-[#778472] w-[18px] h-[18px] md:w-[20px] md:h-[20px] xl:w-[20px] xl:h-[20px] 2xl:w-[22px] 2xl:h-[22px] ${met ? "bg-primary border-primary" : ""
-                    }`}
-            >
-                {met && (
-                    <svg
-                        className="absolute inset-0 m-auto text-background w-[12px] h-[12px] md:w-[14px] md:h-[14px] 2xl:w-[15px] 2xl:h-[15px]"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                    >
-                        <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                )}
-            </span>
-            {label}
-        </li>
     );
 }

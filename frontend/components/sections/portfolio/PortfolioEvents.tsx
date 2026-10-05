@@ -3,19 +3,20 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { portfolioEvents, type EventCategory, type PortfolioEvent } from "@/data/portfolio";
+import { formatLocationYear, type EventCategory, type PortfolioEvent } from "@/lib/portfolio";
 
 type Filter = "All Events" | EventCategory;
 
+// Always every tab, as on the live site; an empty category shows the empty state.
 const filters: Filter[] = ["All Events", "Weddings", "Birthdays", "Corporate", "Social Events"];
 
-export default function PortfolioEvents() {
+export default function PortfolioEvents({ events }: { events: PortfolioEvent[] }) {
   const [activeFilter, setActiveFilter] = useState<Filter>("All Events");
 
   const visibleEvents =
     activeFilter === "All Events"
-      ? portfolioEvents
-      : portfolioEvents.filter((e) => e.category === activeFilter);
+      ? events
+      : events.filter((e) => e.category === activeFilter);
 
   // Desktop row pattern: 3, 2, 3, 2…
   const rows: PortfolioEvent[][] = [];
@@ -57,7 +58,7 @@ export default function PortfolioEvents() {
               Your Celebration Could Be the Next Story We Tell
             </h3>
             <p className="mt-6 sm:mt-7 md:mt-8 font-body font-light italic text-primary text-[15px] leading-[26px] sm:text-[16px] sm:leading-[28px] md:text-[18px] md:leading-[30px] lg:text-[17px] lg:leading-[28px] xl:text-[19px] xl:leading-[32px] 2xl:text-[21px] 2xl:leading-[34px] max-w-[560px] xl:max-w-[640px] 2xl:max-w-[720px]">
-              We design {activeFilter === "Social Events" ? "social events" : activeFilter.toLowerCase()} {" "} with intention, warmth, and refined detail — always centred around you. Ready to Begin? Let&apos;s create something amazing
+              We design {activeFilter === "All Events" ? "celebrations" : activeFilter === "Social Events" ? "social events" : activeFilter.toLowerCase()} {" "} with intention, warmth, and refined detail — always centred around you. Ready to Begin? Let&apos;s create something amazing
             </p>
 
             <Link
@@ -87,32 +88,17 @@ export default function PortfolioEvents() {
 
             {/* Laptop+: 3-2-3-2 row pattern */}
             <div className="hidden lg:flex flex-col gap-y-14 xl:gap-y-16 2xl:gap-y-20">
-              {rows.map((rowEvents, rowIdx) => {
-                // 1 event OR 2 events → render inside a 3-col grid so cards stay at 3-col width
-                if (rowEvents.length === 1 || rowEvents.length === 2) {
-                  return (
-                    <div
-                      key={rowIdx}
-                      className="grid grid-cols-3 gap-8 xl:gap-10 2xl:gap-12"
-                    >
-                      {rowEvents.map((event) => (
-                        <EventCard key={event.slug} event={event} />
-                      ))}
-                    </div>
-                  );
-                }
-                // 3 events → full 3-column row
-                return (
-                  <div
-                    key={rowIdx}
-                    className="grid grid-cols-3 gap-8 xl:gap-10 2xl:gap-12"
-                  >
-                    {rowEvents.map((event) => (
-                      <EventCard key={event.slug} event={event} />
-                    ))}
-                  </div>
-                );
-              })}
+              {/* Every row uses a 3-col grid so 1- and 2-card rows keep 3-col card width */}
+              {rows.map((rowEvents, rowIdx) => (
+                <div
+                  key={rowIdx}
+                  className="grid grid-cols-3 gap-8 xl:gap-10 2xl:gap-12"
+                >
+                  {rowEvents.map((event) => (
+                    <EventCard key={event.slug} event={event} />
+                  ))}
+                </div>
+              ))}
             </div>
           </>
         )}
@@ -121,24 +107,23 @@ export default function PortfolioEvents() {
   );
 }
 
-function EventCard({ event, compact = false }: { event: PortfolioEvent; compact?: boolean }) {
+function EventCard({ event }: { event: PortfolioEvent }) {
   return (
     <Link href={`/portfolio/${event.slug}`} className="group block">
-      <div
-        className={`relative w-full overflow-hidden ${compact ? "aspect-[3/4] lg:aspect-[5/4]" : "aspect-[3/4]"
-          }`}
-      >
-        <Image
-          src={event.coverImage}
-          alt={event.title}
-          fill
-          className="object-cover transition-transform duration-500 group-hover:scale-105"
-          sizes="(max-width: 1024px) 50vw, 33vw"
-        />
+      <div className="relative w-full overflow-hidden aspect-[3/4]">
+        {event.coverImage && (
+          <Image
+            src={event.coverImage}
+            alt={event.title}
+            fill
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            sizes="(max-width: 1024px) 50vw, 33vw"
+          />
+        )}
       </div>
 
       <p className="mt-4 sm:mt-5 md:mt-5 font-sans font-light leading-[184%] tracking-[-0.03em] uppercase text-primary text-[12px] sm:text-[13px] md:text-[14px] lg:text-[15px] xl:text-[16px] 2xl:text-[17px]">
-        {event.location} — {event.year}
+        {formatLocationYear(event)}
       </p>
       <h3 className="mt-1 sm:mt-1.5 font-display font-light tracking-[0.01em] text-primary text-[15px] leading-[24px] sm:text-[17px] sm:leading-[26px] md:text-[19px] md:leading-[28px] lg:text-[24px] lg:leading-[32px] xl:text-[28px] xl:leading-[36px] 2xl:text-[32px] 2xl:leading-[40px]">
         {event.title}

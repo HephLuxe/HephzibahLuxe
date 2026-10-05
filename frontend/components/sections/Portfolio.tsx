@@ -1,18 +1,34 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { CSSProperties } from "react";
+import { getHomeStrip, type ApiImage } from "@/lib/api";
 
-const portfolioImages = [
+// Static strip the site shipped with; used when the API is down or returns no images.
+const fallbackStripItems: ApiImage[] = [
   "/images/portfoliopage/portfoliosix.jpg",
   "/images/hero/herofours.jpg",
   "/images/portfoliopage/portfoliofive.jpg",
   "/images/portfoliopage/portfoliotwo.jpg",
   "/images/portfoliopage/portfolioeight.jpg",
   "/images/portfoliopage/portfolionine.jpg",
+].map((image, i) => ({ image, alt_text: "", sort_order: i }));
 
-];
+async function getStripItems() {
+  try {
+    const items = await getHomeStrip();
+    if (items.length > 0) return items;
+    console.warn("[home] portfolio strip: API returned no images, using static fallback");
+  } catch (err) {
+    // The home page must not fail because the strip API is down; fall back to the static strip.
+    console.warn("[home] portfolio strip: API unreachable, using static fallback:", err);
+  }
+  return fallbackStripItems;
+}
 
-export default function Portfolio() {
-  const loopedImages = [...portfolioImages, ...portfolioImages];
+export default async function Portfolio() {
+  const stripItems = await getStripItems();
+
+  const loopedItems = [...stripItems, ...stripItems];
 
   return (
     <section className="relative overflow-hidden">
@@ -69,21 +85,35 @@ export default function Portfolio() {
 
         {/* Right column: carousel */}
         <div className="relative overflow-hidden bg-background h-[400px] sm:h-[440px] md:h-[480px] lg:h-[520px] xl:h-[580px] 2xl:h-[640px] mt-12 sm:mt-16 md:mt-20 lg:mt-[100px] xl:mt-[120px] 2xl:mt-[140px] mb-8 sm:mb-10 md:mb-12 lg:mb-16 xl:mb-20 2xl:mb-24">
-          <div className="absolute inset-0 flex gap-2 animate-scroll-x">
-            {loopedImages.map((src, i) => (
-              <div
-                key={i}
-                className="relative flex-shrink-0 w-[200px] lg:w-[360px] h-full"
-              >
-                <Image
-                  src={src}
-                  alt=""
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 1024px) 200px, 360px"
-                />
-              </div>
-            ))}
+          <div
+            className="absolute inset-0 flex gap-2 animate-scroll-x"
+            style={
+              {
+                "--strip-count": stripItems.length,
+                // Live site: 5 tiles over 30s = 6s per tile. Keep that px/s for any count.
+                animationDuration: "calc(var(--strip-count) * 6s)",
+              } as CSSProperties
+            }
+          >
+            {loopedItems.map((item, i) => {
+              // Only the first copy is exposed to assistive tech / keyboard; the rest exist for the loop.
+              const isDuplicate = i >= stripItems.length;
+              return (
+                <div
+                  key={i}
+                  aria-hidden={isDuplicate || undefined}
+                  className="relative flex-shrink-0 w-[200px] lg:w-[360px] h-full"
+                >
+                  <Image
+                    src={item.image}
+                    alt={isDuplicate ? "" : item.alt_text}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 1024px) 200px, 360px"
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
