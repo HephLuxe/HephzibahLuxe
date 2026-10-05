@@ -146,9 +146,11 @@ def test_dry_run_passes_and_writes_nothing(prod_before, storage):
     assert "Dry run: nothing written" in out
     assert out.count("sha256 OK") == len(REAL_PLAN["uploads"])
     assert "'a-golden-50th-an-intimate-two-day-celebration-of-family-faith-joy' -> 'golden-50th'" in out
-    assert "title 'Event Day 1' -> 'Event No. 1', slug 'event-day-1' -> 'thanksgiving-gathering'" in out
-    assert "title 'Event Day 2' -> 'Event No. 2', slug 'event-day-2' -> 'celebration-night'" in out
+    assert "(event 1): slug 'event-day-1' -> 'thanksgiving-gathering'\n" in out
+    assert "(event 1): slug 'event-day-2' -> 'celebration-night'\n" in out
     assert "UNPUBLISH:\n  legacysixs.jpg (f252dff1-" in out
+    assert "title 'Event No." not in out
+    assert "2 day slug change(s), 0 day label change(s)" in out
     save.assert_not_called()
     assert _snapshot() == before
 

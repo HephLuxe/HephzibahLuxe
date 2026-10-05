@@ -73,7 +73,7 @@
       },
       "before": {
         "slug": "event-day-2",
-        "event_day_title": "Event Day 2"
+        "event_day_title": "Event No. 2"
       },
       "after": {
         "slug": "celebration-night",
@@ -89,7 +89,7 @@
       },
       "before": {
         "slug": "event-day-1",
-        "event_day_title": "Event Day 1"
+        "event_day_title": "Event No. 1"
       },
       "after": {
         "slug": "thanksgiving-gathering",

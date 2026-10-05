@@ -394,14 +394,15 @@ class Command(BaseCommand):
         for pe in plan["events"]:
             if pe["before"] != pe["after"]:
                 w(f"  event {pe['id']}: {pe['before']['public_slug']!r} -> {pe['after']['public_slug']!r}")
-        w("DAY LABELS:")
+        w("DAY LABELS / SLUGS:")
         for pd in plan["days"]:
-            if pd["before"] != pd["after"]:
-                w(
-                    f"  day {pd['id']} (event {pd['identity']['owner_id']}): "
-                    f"title {pd['before']['event_day_title']!r} -> {pd['after']['event_day_title']!r}, "
-                    f"slug {pd['before']['slug']!r} -> {pd['after']['slug']!r}"
-                )
+            changed = [
+                f"{name} {pd['before'][field]!r} -> {pd['after'][field]!r}"
+                for name, field in (("title", "event_day_title"), ("slug", "slug"))
+                if pd["before"][field] != pd["after"][field]
+            ]
+            if changed:
+                w(f"  day {pd['id']} (event {pd['identity']['owner_id']}): {', '.join(changed)}")
 
         w("UPLOADS:")
         for up in plan["uploads"]:
@@ -439,7 +440,10 @@ class Command(BaseCommand):
             w(f"  {pi['filename']} ({pi['id']}): sort_order {pi['before']['sort_order']} -> {pi['after']['sort_order']}")
         w(
             f"Summary: {len(events)} event(s), {sum(pe['before'] != pe['after'] for pe in plan['events'])} "
-            f"public slug change(s), {sum(pd['before'] != pd['after'] for pd in plan['days'])} day label change(s), "
+            f"public slug change(s), {sum(pd['before']['slug'] != pd['after']['slug'] for pd in plan['days'])} "
+            f"day slug change(s), "
+            f"{sum(pd['before']['event_day_title'] != pd['after']['event_day_title'] for pd in plan['days'])} "
+            f"day label change(s), "
             f"{len(plan['uploads'])} upload(s), {len(reorders)} reorder(s)."
         )
         if problems:
